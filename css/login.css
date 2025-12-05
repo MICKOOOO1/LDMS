@@ -1,0 +1,293 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap');
+
+/* =========================================================
+   GLOBAL STYLES
+========================================================= */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+body {
+  height: 100vh;
+  overflow-x: hidden;
+  background-image: url('../assets/imgs/dorm.jpg');
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+  padding: 100px;
+  padding-top: 40px;
+  color: #fff;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 80px;
+  padding: 0 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 99;
+  backdrop-filter: blur(20px);
+  background: #185D2A;
+}
+
+.alert-box {
+  position: fixed;
+  top: 110px; /* sit just below the fixed header */
+  left: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  z-index: 98; /* below header, above content */
+  pointer-events: none; /* avoid blocking page interactions */
+}
+
+.alert-box .alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: green;
+  color: #f10000;
+  border: none;
+  box-shadow: none;
+  pointer-events: auto; /* allow close/clicks if added later */
+}
+
+.alert.success {
+  background: #e8f6ee;
+  border-color: #bfe5cd;
+  color: #0f5132;
+}
+
+.alert.error {
+  background: #fdecea;
+  border-color: #f5c2c0;
+  color: red;
+}
+
+.logo {
+  font-size: 26px;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo img {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
+}
+
+
+/* Auth Buttons */
+.user-auth .login-btn-modal {
+  height: 40px;
+  padding: 0 30px;
+  background: transparent;
+  font-size: 16px;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* =========================================================
+   SECTION TITLE
+========================================================= */
+section {
+  padding-top: 120px;
+  text-align: center;
+}
+section h1 {
+  font-size: 30px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: #fff;
+}
+
+/* =========================================================
+   LOGIN FORM BOX
+========================================================= */
+.auth-modal {
+  margin: 120px auto 40px;
+  max-width: 450px;
+  width: 80%;
+  margin-top: 160px;
+  /* Solid light gray background for better contrast and legibility */
+  background: #F8F8F8;
+  border-radius: 25px;
+  padding: 30px 40px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+  color: #333;
+  border: 2px solid #185D2A;
+}
+
+.form-box.login h2 {
+  text-align: center;
+  margin-bottom: -5px;
+  font-size: 24px;
+  color: #185D2A;
+}
+
+/* =========================================================
+   INPUT FIELDS
+========================================================= */
+.input-box {
+  position: relative;
+  margin-bottom: 15px;
+}
+
+.input-box label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 5px;
+  color: #333;
+}
+
+.input-box input {
+  width: 100%;
+  padding: 10px 40px 10px 15px;
+  background: #ffffff;
+  border: 1.5px solid #ddd;
+  border-radius: 25px;
+  font-size: 14px;
+  color: #333;
+  outline: none;
+  transition: 0.3s ease;
+}
+.input-box input:focus {
+  border-color: #185D2A;
+  background: #ffffff;
+}
+
+.input-box i {
+  position: absolute;
+  right: 15px;
+  top: 45px;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: #185D2A;
+}
+
+.input-box i.bx-eye,
+.input-box i.bx-eye-slash {
+  cursor: pointer;
+  color: #185D2A;
+  transition: color 0.3s ease;
+}
+
+.input-box i.bx-eye:hover,
+.input-box i.bx-eye-slash:hover {
+  color: #22a765; 
+}
+
+
+/* .forgot-password-link will be shown/hidden by PHP condition, so no extra show/hide class needed */
+
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+.btn {
+  width: 50%;
+  height: 42px;
+  background: #185D2A;
+  border-radius: 35px;
+  border: none;
+  position: center;
+  margin-left: 25%;
+  font-size: 15px;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.3s ease;
+  margin-top: 10px;
+}
+.btn:hover {
+  transform: translateY(-2px);
+  background: #2e7d32;
+}
+
+/* Disabled state for Login button when lockout is active */
+.btn:disabled,
+.btn[disabled] {
+  background: #9aa5b1; /* distinct muted color */
+  color: #f0f3f6;
+  cursor: not-allowed;
+  transform: none;
+  opacity: 1; /* keep solid color */
+  pointer-events: none; /* ensure no hover/click */
+}
+
+/* Prevent hover animation when disabled */
+.btn:disabled:hover,
+.btn[disabled]:hover {
+  background: #9aa5b1;
+  transform: none;
+}
+
+/* =========================================================
+   TEXT & LINKS
+========================================================= */
+.form-box p {
+  font-size: 13px;
+  text-align: center;
+  margin: 10px 0;
+  color: #333;
+}
+.form-box p a {
+  color: #185D2A;
+  text-decoration: none;
+  font-weight: 600;
+}
+.form-box p a.register-link,
+.form-box p a.register {
+  /* emphasize the Register link specifically (works if the anchor has a class; harmless if not) */
+  color: #22a765;
+}
+.form-box p a:hover {
+  text-decoration: underline;
+}
+
+/* Lockout timer styling */
+#lockout-timer {
+  color: red;
+}
+
+/* =========================================================
+   FOOTER
+========================================================= */
+footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: #185D2A;
+  color: #fff;
+  padding: 3px;
+  text-align: center;
+  z-index: 100;
+}
+

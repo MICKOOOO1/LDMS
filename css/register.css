@@ -1,0 +1,346 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap');
+
+/* =========================================================
+   GLOBAL STYLES
+========================================================= */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-image: url('../assets/imgs/dorm.jpg');
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: #fff;
+}
+
+
+/* =========================================================
+   HEADER
+========================================================= */
+header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 60px;
+  background: #185D2A;
+  backdrop-filter: blur(15px);
+  z-index: 100;
+}
+
+.logo {
+  font-size: 26px;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo img {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
+}
+
+
+/* Auth Buttons */
+.user-auth .login-btn-modal {
+  height: 40px;
+  padding: 0 30px;
+  background: transparent;
+  font-size: 16px;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* =========================================================
+   SECTION TITLE
+========================================================= */
+section {
+  padding-top: 120px;
+  text-align: center;
+}
+section h1 {
+  font-size: 30px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: #000000;
+}
+
+.section-title {
+  grid-column: span 3;
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 1px;
+  padding-bottom: -100%;
+  color: #000000;
+}
+
+/* =========================================================
+   REGISTER FORM BOX
+========================================================= */
+.auth-modal {
+  width: 80%;
+  max-width: 950px;
+  background: #F8F8F8;
+  border-radius: 25px;
+  padding: 20px 20px; /* more top padding so header/title sits inside container */
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  color: #333;
+  max-height: none; /* allow modal to expand vertically */
+  overflow: visible; /* show content instead of hiding it */
+  border: 2px solid #185D2A;
+  margin-top: 120px;  /* slightly larger gap below fixed header */
+  margin-bottom: 70px; /* space above fixed footer */
+} 
+
+.form-box.register h2 {
+  text-align: center;
+  margin-bottom: -15px; /* keep heading inside the container */
+  font-size: 20px;
+  color: #185D2A;
+}
+
+/* =========================================================
+   FORM GRID
+========================================================= */
+.form-box.register form {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px 10px;
+  align-items: start;
+  max-height: none;
+  overflow-y: visible;
+  padding-right: 0;
+  margin-bottom: -20px;
+}
+
+/* =========================================================
+   INPUT FIELDS
+========================================================= */
+.input-box {
+  position: relative;
+  gap: -50px;
+}
+
+.input-box label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: -3px;
+  color: #333;
+}
+
+.input-box input,
+.input-box select {
+   width: 100%;
+   padding: 4px 8px; /* smaller vertical padding */
+   background: #ffffff; /* white background */
+   border: 1.2px solid #ddd;
+   border-radius: 14px; /* smaller radius */
+   font-size: 11px; /* smaller text */
+   color: #333; /* dark text */
+   outline: none;
+   transition: 0.18s ease;
+}
+
+.input-box select {
+   appearance: none;
+   -webkit-appearance: none;
+   -moz-appearance: none;
+   background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%23333333' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+   background-repeat: no-repeat;
+   background-position: right 12px center;
+   background-size: 12px 8px;
+   cursor: pointer;
+}
+
+.input-box input:focus,
+.input-box select:focus {
+  border-color: #185D2A;
+  background: #ffffff; /* white background on focus */
+}
+.input-box input::placeholder {
+  color: rgba(51, 51, 51, 0.5);
+}
+.input-box select {
+  appearance: none;
+  cursor: pointer;
+}
+
+.input-box i {
+  position: absolute;
+  right: 14px;
+  top: 32px;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: #185D2A;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+
+
+/* Hide default indicator styling */
+input[type="date"]::-webkit-inner-spin-button,
+input[type="date"]::-webkit-clear-button {
+  display: none;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 0.8;
+}
+
+
+
+
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+.btn {
+  grid-column: span 3;
+  width: 50%;
+  height: 42px;
+  background: #185D2A;
+  position: center;
+  margin-left: 25%;
+  border-radius: 35px;
+  border: none;
+  font-size: 15px;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.3s ease;
+  margin-top: 10px;
+}
+.btn:hover {
+  transform: translateY(-2px);
+  background: #2e7d32;
+}
+
+/* =========================================================
+   TEXT & LINKS
+========================================================= */
+.form-box p {
+  grid-column: span 3;
+  font-size: 13px;
+  text-align: center;
+  margin: 10px 0;
+  color: #333;
+}
+.form-box p a {
+  color: #22a765;
+  text-decoration: none;
+  font-weight: 600;
+}
+.form-box p a:hover {
+  text-decoration: underline;
+}
+
+.asterisk {
+  color: red;
+}
+.optional {
+  color: red;
+}
+
+.input-box i.bx-eye,
+.input-box i.bx-eye-slash {
+  cursor: pointer;
+  color: #185D2A;
+  transition: color 0.3s ease;
+}
+
+.input-box i.bx-eye:hover,
+.input-box i.bx-eye-slash:hover {
+  color: #22a765; 
+}
+
+.input-message {
+  font-size: 0.78rem; /* smaller helper text */
+    margin-top: 3px;
+    display: block;
+}
+
+
+/* =========================================================
+   FOOTER
+========================================================= */
+footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: #185D2A;
+  color: #fff;
+  padding: 3px;
+  text-align: center;
+  z-index: 100;
+}
+
+
+/* =========================================================
+   FIX FIELD ALIGNMENT LIKE SAMPLE PHOTO
+========================================================= */
+
+/* ID Number = first column only */
+.input-box:nth-of-type(1) {
+    grid-column: span 1;
+}
+
+/* First Name, Middle Name, Last Name = same row */
+.input-box:nth-of-type(2),
+.input-box:nth-of-type(3),
+.input-box:nth-of-type(4) {
+    grid-column: span 1;
+}
+
+/* Extension + DOB + Age aligned */
+.input-box:nth-of-type(5),
+.input-box:nth-of-type(6),
+.input-box:nth-of-type(7) {
+    grid-column: span 1;
+}
+
+/* Sex + Email on same row */
+.input-box:nth-of-type(8),
+.input-box:nth-of-type(9) {
+    grid-column: span 1;
+}
+
+/* Address Section – clean 3-column layout */
+.section-title + .input-box {
+    grid-column: span 1;
+}
+
+/* Account Info – 3 columns */
+.section-title + .input-box {
+    grid-column: span 1;
+}

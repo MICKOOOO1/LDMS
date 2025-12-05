@@ -1,0 +1,208 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap');
+
+/* Global Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Poppins", serif;
+}
+
+
+html, body {
+    height: 100%;
+    overflow: hidden; /* Prevent page scroll */
+}
+
+/* HEADER */
+header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 80px; /* consistent height */
+  padding: 0 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 99;
+  backdrop-filter: blur(20px);
+  background: #185D2A;
+}
+
+/* Ensure header links / buttons are white for contrast */
+header a,
+header .user-auth .login-btn-modal {
+  color: #FFFFFF;
+}
+
+/* System title centered in header */
+.system-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+  color: #fff;
+  font-weight: 600;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* Logo (left) */
+.logo {
+  font-size: 26px;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo img {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
+}
+
+
+/* Auth Buttons */
+.user-auth .login-btn-modal {
+  height: 40px;
+  padding: 0 30px;
+  background: transparent;
+  font-size: 16px;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* HERO SECTION */
+section.hero {
+  width: 100%;
+  height: 100vh; /* Full viewport height */
+  background-image: url('../assets/imgs/dorm.jpg');
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 0; /* remove extra padding to avoid scroll */
+}
+
+
+.hero-container {
+  background: #FFFFFF;
+  padding: 50px;
+  border-radius: 10px;
+  max-width: 600px;
+  height: 300px;
+  text-size-adjust: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border: 2px solid #185D2A;
+}
+
+.hero h1 {
+  color: #185D2A;
+  font-weight: 700;
+  margin-bottom: 10px;
+  line-height: 1.2;
+  font-size: 30px;
+  height: 60px;
+}
+
+.hero p {
+  color: #000000;
+  font-size: 20px;
+  font-weight: 400;
+  margin-bottom: 30px;
+  line-height: 1.4;
+}
+
+.hero .btn {
+  display: inline-block;
+  padding: 10px 40px;
+  background: #185D2A;
+  color: #FFFFFF;
+  text-decoration: none;
+  border-radius: 20px;
+  font-size: 16px;
+  font-weight: 600;
+  width: 60%;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+.hero .btn:hover {
+  transform: translateY(-3px);
+  background: #2e7d32;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* FORM BOXES */
+.form-box {
+  width: 90%;
+  height: 45vh;
+  padding: 30px 50px;
+  transition: transform 0.3s ease;
+}
+.form-box.login {
+  opacity: 1;
+  pointer-events: auto;
+}
+.form-box.register {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.auth-modal.expanded .form-box.register {
+  opacity: 1;
+  pointer-events: auto;
+}
+.auth-modal.expanded .form-box.login {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* BUTTON */
+.btn {
+  width: 100%;
+  height: 45px;
+  background: #fff;
+  border-radius: 40px;
+  border: none;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  font-size: 16px;
+  color: #222;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.3s ease;
+  grid-column: span 3;
+  margin-top: 10px;
+}
+.btn:hover {
+  transform: translateY(-2px);
+}
+
+/* FOOTER */
+footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: #185D2A;
+  color: #fff;
+  padding: 3px;
+  text-align: center;
+  z-index: 100;
+}
+
+

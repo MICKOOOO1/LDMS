@@ -1,0 +1,87 @@
+-- Create database
+DROP DATABASE IF EXISTS csu_dorm_db;
+
+CREATE DATABASE csu_dorm_db;
+
+USE csu_dorm_db;
+
+-- USERS TABLE
+DROP TABLE IF EXISTS users;
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(15) NOT NULL UNIQUE,        -- ID Number (format xxxx-xxxx)
+    first_name VARCHAR(50) NOT NULL,
+    middle_name VARCHAR(50) NULL,
+    last_name VARCHAR(50) NOT NULL,
+    extension_name VARCHAR(10) NULL,
+    dob DATE NOT NULL,
+    age TINYINT UNSIGNED NOT NULL,
+    sex ENUM('male', 'female') NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,        -- hashed password
+    purok_street VARCHAR(100) NOT NULL,
+    barangay VARCHAR(100) NOT NULL,
+    city_municipality VARCHAR(100) NOT NULL,
+    province VARCHAR(100) NOT NULL,
+    country VARCHAR(100) NOT NULL,
+    zip_code VARCHAR(20) NOT NULL,
+    date_registered TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- SECURITY QUESTIONS TABLE
+DROP TABLE IF EXISTS security_questions;
+CREATE TABLE security_questions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(15) NOT NULL,           -- links to users.user_id
+    question_code VARCHAR(50) NOT NULL,     -- e.g. 'first_pet', 'first_school'
+    answer_hash VARCHAR(255) NOT NULL,      -- store hashed answers
+    CONSTRAINT fk_sq_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        ON DELETE CASCADE
+);
+
+-- LOGIN ATTEMPTS TABLE (optional, not strictly required because you use sessions)
+DROP TABLE IF EXISTS login_attempts;
+CREATE TABLE login_attempts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    lockout_until INT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+DELIMITER $$
+
+CREATE PROCEDURE RegisterUser(
+    IN p_user_id        VARCHAR(20),
+    IN p_first_name     VARCHAR(50),
+    IN p_middle_name    VARCHAR(50),
+    IN p_last_name      VARCHAR(50),
+    IN p_extension_name VARCHAR(10),
+    IN p_dob            DATE,
+    IN p_age            INT,
+    IN p_sex            VARCHAR(10),
+    IN p_username       VARCHAR(50),
+    IN p_email          VARCHAR(100),
+    IN p_password_hash  VARCHAR(255),
+    IN p_purok_street   VARCHAR(100),
+    IN p_barangay       VARCHAR(100),
+    IN p_city_municipality VARCHAR(100),
+    IN p_province       VARCHAR(100),
+    IN p_country        VARCHAR(100),
+    IN p_zip_code       VARCHAR(10)
+)
+BEGIN
+    INSERT INTO users (
+        user_id, first_name, middle_name, last_name, extension_name,
+        dob, age, sex, username, email, password_hash,
+        purok_street, barangay, city_municipality, province, country, zip_code
+    ) VALUES (
+        p_user_id, p_first_name, p_middle_name, p_last_name, p_extension_name,
+        p_dob, p_age, p_sex, p_username, p_email, p_password_hash,
+        p_purok_street, p_barangay, p_city_municipality, p_province, p_country, p_zip_code
+    );
+END$$
+
+DELIMITER ;
