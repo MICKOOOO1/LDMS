@@ -23,6 +23,19 @@ if ($conn->query($sql) === TRUE) {
 // 3) Select the database
 $conn->select_db('csu_dorm_db');
 
+function setup_ensure_column(mysqli $conn, string $table, string $column, string $definition): void {
+    $stmt = $conn->prepare("SHOW COLUMNS FROM `$table` LIKE ?");
+    $stmt->bind_param("s", $column);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $exists = $result->num_rows > 0;
+    $stmt->close();
+
+    if (!$exists) {
+        $conn->query("ALTER TABLE `$table` ADD `$column` $definition");
+    }
+}
+
 // 4) Create users table
 $sql = "CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -37,6 +50,9 @@ $sql = "CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(100) NOT NULL UNIQUE,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
+    role ENUM('user','admin','super_admin') NOT NULL DEFAULT 'user',
+    account_status ENUM('pending','approved','blocked') NOT NULL DEFAULT 'approved',
+    privileges TEXT NULL,
     purok_street VARCHAR(100) NOT NULL,
     barangay VARCHAR(100) NOT NULL,
     city_municipality VARCHAR(100) NOT NULL,
@@ -51,6 +67,10 @@ if ($conn->query($sql) === TRUE) {
 } else {
     echo "Error creating users table: " . $conn->error . "<br>";
 }
+
+setup_ensure_column($conn, 'users', 'role', "ENUM('user','admin','super_admin') NOT NULL DEFAULT 'user'");
+setup_ensure_column($conn, 'users', 'account_status', "ENUM('pending','approved','blocked') NOT NULL DEFAULT 'approved'");
+setup_ensure_column($conn, 'users', 'privileges', "TEXT NULL");
 
 // 5) Create security_questions table
 $sql = "CREATE TABLE IF NOT EXISTS security_questions (
@@ -83,6 +103,62 @@ if ($conn->query($sql) === TRUE) {
 } else {
     echo "Error creating login attempts table: " . $conn->error . "<br>";
 }
+
+// 7) Create delete_requests table
+$sql = "CREATE TABLE IF NOT EXISTS delete_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    requested_by INT NOT NULL,
+    target_user INT NOT NULL,
+    reason TEXT NOT NULL,
+    user_snapshot TEXT NOT NULL,
+    request_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by INT NULL,
+    reviewed_at TIMESTAMP NULL DEFAULT NULL,
+    CONSTRAINT fk_delete_request_admin FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_delete_request_target FOREIGN KEY (target_user) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_delete_request_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+)";
+
+if ($conn->query($sql) === TRUE) {
+    echo "Delete requests table created successfully<br>";
+} else {
+    echo "Error creating delete requests table: " . $conn->error . "<br>";
+}
+
+// 8) Seed default super admin account
+$defaultPassword = password_hash('SuperAdmin123!', PASSWORD_DEFAULT);
+$sql = "INSERT INTO users (
+    user_id, first_name, middle_name, last_name, extension_name, dob, age, sex,
+    email, username, password_hash, role, account_status, privileges,
+    purok_street, barangay, city_municipality, province, country, zip_code
+) VALUES (
+    '0000-0001', 'Super', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+    'superadmin@csucc-ldms.local', 'super.admin', ?, 'super_admin', 'approved',
+    'manage_accounts,manage_privileges,delete_accounts',
+    'Campus', 'CSUCC', 'Cabadbaran', 'Agusan Del Norte', 'Philippines', '8605'
+) ON DUPLICATE KEY UPDATE role = 'super_admin', account_status = 'approved'";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $defaultPassword);
+$stmt->execute();
+$stmt->close();
+
+// 9) Seed default admin account
+$defaultPassword = password_hash('Admin123!', PASSWORD_DEFAULT);
+$sql = "INSERT INTO users (
+    user_id, first_name, middle_name, last_name, extension_name, dob, age, sex,
+    email, username, password_hash, role, account_status, privileges,
+    purok_street, barangay, city_municipality, province, country, zip_code
+) VALUES (
+    '0000-0002', 'System', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+    'admin@csucc-ldms.local', 'system.admin', ?, 'admin', 'approved',
+    'manage_registration,update_accounts',
+    'Campus', 'CSUCC', 'Cabadbaran', 'Agusan Del Norte', 'Philippines', '8605'
+) ON DUPLICATE KEY UPDATE role = 'admin', account_status = 'approved'";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $defaultPassword);
+$stmt->execute();
+$stmt->close();
 
 $conn->close();
 

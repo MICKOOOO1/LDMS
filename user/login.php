@@ -8,7 +8,13 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 if (isset($_SESSION['user_id'])) {
-    header('Location: home.php');
+    if (($_SESSION['role'] ?? '') === 'super_admin') {
+        header('Location: ../super%20admin/dashboard.php');
+    } elseif (($_SESSION['role'] ?? '') === 'admin') {
+        header('Location: ../admin/dashboard.php');
+    } else {
+        header('Location: home.php');
+    }
     exit;
 }
 

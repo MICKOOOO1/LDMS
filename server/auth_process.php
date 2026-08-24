@@ -28,7 +28,7 @@ if (isset($_POST['login_btn'])) {
         $alerts[] = ['type' => 'error', 'message' => 'Username and password are required.'];
         $_SESSION['last_failure_type'] = 'empty';
     } else {
-        $stmt = $conn->prepare("SELECT id, username, password_hash, first_name FROM users WHERE username = ? OR email = ?");
+        $stmt = $conn->prepare("SELECT id, username, password_hash, first_name, role, account_status, privileges FROM users WHERE username = ? OR email = ?");
         $stmt->bind_param("ss", $username, $username);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -41,16 +41,32 @@ if (isset($_POST['login_btn'])) {
         } else {
             $user = $result->fetch_assoc();
             if (password_verify($password, $user['password_hash'])) {
+                if ($user['account_status'] === 'pending') {
+                    $alerts[] = ['type' => 'error', 'message' => 'Your registration is pending administrator approval.'];
+                    $_SESSION['last_failure_type'] = 'status';
+                } elseif ($user['account_status'] === 'blocked') {
+                    $alerts[] = ['type' => 'error', 'message' => 'Your account is blocked. Please contact the administrator.'];
+                    $_SESSION['last_failure_type'] = 'status';
+                } else {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['name'] = $user['first_name'];
+                $_SESSION['role'] = $user['role'];
+                $_SESSION['privileges'] = $user['privileges'] ?? '';
                 $_SESSION['failed_attempts'] = 0;
                 $_SESSION['cred_failed_attempts'] = 0;
                 unset($_SESSION['lockout_until'], $_SESSION['last_failure_type']);
                 $alerts[] = ['type' => 'success', 'message' => 'Login successful!'];
                 $_SESSION['alerts'] = $alerts;
-                header("Location: ../user/home.php");
+                if ($user['role'] === 'super_admin') {
+                    header("Location: ../super%20admin/dashboard.php");
+                } elseif ($user['role'] === 'admin') {
+                    header("Location: ../admin/dashboard.php");
+                } else {
+                    header("Location: ../user/home.php");
+                }
                 exit;
+                }
             } else {
                 $alerts[] = ['type' => 'error', 'message' => 'Invalid password.'];
                 // Count only credential-based failures
@@ -335,11 +351,13 @@ if (isset($_POST['register_btn'])) {
     if (empty($alerts)) {
         $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
-        $stmt = $conn->prepare("INSERT INTO users (user_id, first_name, middle_name, last_name, extension_name, dob, age, sex, username, email, password_hash, purok_street, barangay, city_municipality, province, country, zip_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+        $role = 'user';
+        $account_status = 'pending';
+        $stmt = $conn->prepare("INSERT INTO users (user_id, first_name, middle_name, last_name, extension_name, dob, age, sex, username, email, password_hash, role, account_status, purok_street, barangay, city_municipality, province, country, zip_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
         $stmt->bind_param(
-            "ssssssissssssssss",
+            "ssssssissssssssssss",
             $user_id, $first_name, $middle_name, $last_name, $extension_name,
-            $dob, $age, $sex, $username, $email, $password_hash,
+            $dob, $age, $sex, $username, $email, $password_hash, $role, $account_status,
             $purok_street, $barangay, $city_municipality, $province, $country, $zip_code
         );
 
@@ -410,7 +428,7 @@ if (isset($_POST['save_questions_btn'])) {
         }
 
         if (empty($alerts)) {
-            $_SESSION['alerts'] = [['type' => 'success', 'message' => 'Registration completed successfully! You can now login.']];
+            $_SESSION['alerts'] = [['type' => 'success', 'message' => 'Registration completed successfully! Please wait for administrator approval before logging in.']];
             header("Location: ../user/login.php");
             exit;
         }

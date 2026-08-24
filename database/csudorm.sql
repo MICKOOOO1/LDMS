@@ -6,6 +6,8 @@ CREATE DATABASE csu_dorm_db;
 USE csu_dorm_db;
 
 -- USERS TABLE
+DROP TABLE IF EXISTS delete_requests;
+DROP TABLE IF EXISTS security_questions;
 DROP TABLE IF EXISTS users;
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -20,6 +22,9 @@ CREATE TABLE users (
     email VARCHAR(100) NOT NULL UNIQUE,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,        -- hashed password
+    role ENUM('user','admin','super_admin') NOT NULL DEFAULT 'user',
+    account_status ENUM('pending','approved','blocked') NOT NULL DEFAULT 'approved',
+    privileges TEXT NULL,
     purok_street VARCHAR(100) NOT NULL,
     barangay VARCHAR(100) NOT NULL,
     city_municipality VARCHAR(100) NOT NULL,
@@ -30,7 +35,6 @@ CREATE TABLE users (
 );
 
 -- SECURITY QUESTIONS TABLE
-DROP TABLE IF EXISTS security_questions;
 CREATE TABLE security_questions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id VARCHAR(15) NOT NULL,           -- links to users.user_id
@@ -49,6 +53,45 @@ CREATE TABLE login_attempts (
     attempts INT NOT NULL DEFAULT 0,
     lockout_until INT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE delete_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    requested_by INT NOT NULL,
+    target_user INT NOT NULL,
+    reason TEXT NOT NULL,
+    user_snapshot TEXT NOT NULL,
+    request_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by INT NULL,
+    reviewed_at TIMESTAMP NULL DEFAULT NULL,
+    CONSTRAINT fk_delete_request_admin FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_delete_request_target FOREIGN KEY (target_user) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_delete_request_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+INSERT INTO users (
+    user_id, first_name, middle_name, last_name, extension_name, dob, age, sex,
+    email, username, password_hash, role, account_status, privileges,
+    purok_street, barangay, city_municipality, province, country, zip_code
+) VALUES (
+    '0000-0001', 'Super Admin', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+    'superadmin@csucc-ldms.local', 'super.admin',
+    '$2y$10$gkCEHa80hHpCZONoNg31Iu.gq8ppTlxNpaIYOmzKWJKAXO63LqUhq',
+    'super_admin', 'approved', 'manage_accounts,manage_privileges,delete_accounts',
+    'Campus', 'CSUCC', 'Cabadbaran', 'Agusan Del Norte', 'Philippines', '8605'
+);
+
+INSERT INTO users (
+    user_id, first_name, middle_name, last_name, extension_name, dob, age, sex,
+    email, username, password_hash, role, account_status, privileges,
+    purok_street, barangay, city_municipality, province, country, zip_code
+) VALUES (
+    '0000-0002', 'Administrator', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+    'admin@csucc-ldms.local', 'system.admin',
+    '$2y$10$lMhb/4L9PR9VaZeaw7TlAukkSTvfXJe46jG6T1CI/CVJ7QVQXE7SO',
+    'admin', 'approved', 'manage_registration,update_accounts',
+    'Campus', 'CSUCC', 'Cabadbaran', 'Agusan Del Norte', 'Philippines', '8605'
 );
 
 DELIMITER $$
