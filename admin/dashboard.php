@@ -8,7 +8,12 @@ $alerts = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
 
 $employeeId = trim($_GET['employee_id'] ?? '');
-$pendingRegistrations = fetch_pending_registrations($conn);
+$approvalPage = max(1, (int)($_GET['approval_page'] ?? 1));
+$approvalMonth = trim($_GET['approval_month'] ?? '');
+$approvalDate = trim($_GET['approval_date'] ?? '');
+$pendingTotal = fetch_pending_registration_count($conn, $approvalMonth, $approvalDate);
+$pendingRegistrations = fetch_pending_registrations_page($conn, $approvalPage, $approvalMonth, $approvalDate);
+$approvalPages = max(1, (int)ceil($pendingTotal / 5));
 $accounts = fetch_accounts($conn, $employeeId);
 ?>
 <!DOCTYPE html>
@@ -24,6 +29,10 @@ $accounts = fetch_accounts($conn, $employeeId);
 <header>
     <a href="dashboard.php" class="logo"><img src="../assets/imgs/logo.png" alt="CSUCC Logo"> CSUCC LDMS</a>
     <nav>
+        <a href="dashboard.php" class="active">Dashboard</a>
+        <a href="#pending-registrations">Pending</a>
+        <a href="#accounts">Accounts</a>
+        <a href="../user/logs.php">Logs</a>
         <span><?= htmlspecialchars($_SESSION['name'] ?? 'Administrator'); ?></span>
         <a href="../user/logout.php">Logout</a>
     </nav>
@@ -39,10 +48,16 @@ $accounts = fetch_accounts($conn, $employeeId);
         <p>Review registrations, filter accounts, and update user information.</p>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="pending-registrations">
         <div class="section-bar">
             <h2>Pending Registrations</h2>
-            <span class="count-badge"><?= count($pendingRegistrations); ?> waiting</span>
+            <form method="GET" class="filter-form">
+                <input type="month" name="approval_month" value="<?= htmlspecialchars($approvalMonth); ?>">
+                <input type="date" name="approval_date" value="<?= htmlspecialchars($approvalDate); ?>">
+                <button type="submit">Filter</button>
+                <a href="dashboard.php#pending-registrations">Clear</a>
+            </form>
+            <span class="count-badge"><?= $pendingTotal; ?> waiting</span>
         </div>
 
         <div class="account-list">
@@ -72,9 +87,16 @@ $accounts = fetch_accounts($conn, $employeeId);
                 <p>No pending registrations.</p>
             <?php endif; ?>
         </div>
+        <?php if ($approvalPages > 1): ?>
+            <div class="pagination" aria-label="Pending registration pages">
+                <?php if ($approvalPage > 1): ?><a href="?<?= htmlspecialchars(http_build_query(['approval_page' => $approvalPage - 1, 'approval_month' => $approvalMonth, 'approval_date' => $approvalDate])); ?>#pending-registrations">Previous</a><?php endif; ?>
+                <span>Page <?= $approvalPage; ?> of <?= $approvalPages; ?></span>
+                <?php if ($approvalPage < $approvalPages): ?><a href="?<?= htmlspecialchars(http_build_query(['approval_page' => $approvalPage + 1, 'approval_month' => $approvalMonth, 'approval_date' => $approvalDate])); ?>#pending-registrations">Next</a><?php endif; ?>
+            </div>
+        <?php endif; ?>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="accounts">
         <div class="section-bar">
             <h2>Accounts</h2>
             <form method="GET" class="filter-form">
@@ -107,6 +129,11 @@ $accounts = fetch_accounts($conn, $employeeId);
                             <option value="blocked" <?= $account['account_status'] === 'blocked' ? 'selected' : ''; ?>>Blocked</option>
                         </select>
                         <button type="submit" name="change_status_btn">Save Status</button>
+                        <?php if ($account['account_status'] === 'blocked'): ?>
+                            <button type="submit" name="unblock_account_btn">Unblock Account</button>
+                        <?php elseif ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
+                            <button type="submit" name="block_account_btn" class="danger">Block Account</button>
+                        <?php endif; ?>
                     </form>
 
                     <form action="../server/admin_process.php" method="POST" class="grid-form compact">

@@ -41,6 +41,7 @@ unset($_SESSION['alerts'], $_SESSION['active_form']);
     <nav>
         <?php if (!empty($name)): ?>
             <span class="hello">Hello, <?= htmlspecialchars($name); ?></span>
+            <a href="logs.php" class="login-btn-modal">Logs</a>
             <a href="logout.php" class="login-btn-modal">Logout</a>
         <?php else: ?>
             <a href="login.php" class="login-btn-modal">Login</a>

@@ -49,7 +49,7 @@ if ($id_number !== null) {
 <div class="auth-modal show slide expanded">
     <div class="form-box security-questions">
         <h2>Set Your Authentication Questions</h2>
-        <p class="subtitle">Please select and answer 3 security questions to protect your account if ever you forget your password</p>
+        <p class="subtitle">Please select and answer 3 different security questions to protect your account if you forget your password.</p>
         
         <form id="securityForm" action="../server/auth_process.php" method="POST" novalidate>
             <!-- Hidden input to store ID number -->

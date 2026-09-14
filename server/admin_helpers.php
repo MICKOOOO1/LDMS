@@ -11,7 +11,11 @@ function require_admin_role(array $allowedRoles): void {
     }
 }
 
-function admin_redirect_for_role(string $role): string {
+function admin_redirect_for_role(string $role, string $returnPage = ''): string {
+    if ($role === 'super_admin' && in_array($returnPage, ['pending.php', 'create_admin.php', 'accounts.php', 'delete_requests.php'], true)) {
+        return '../super%20admin/' . $returnPage;
+    }
+
     return $role === 'super_admin' ? '../super%20admin/dashboard.php' : '../admin/dashboard.php';
 }
 
@@ -53,6 +57,103 @@ function fetch_pending_registrations(mysqli $conn): array {
     $stmt->close();
 
     return $accounts;
+}
+
+function pending_registration_filter(string $month, string $date): array {
+    $where = "role = 'user' AND account_status = 'pending'";
+    $params = [];
+    $types = '';
+
+    if (preg_match('/^\\d{4}-\\d{2}$/', $month)) {
+        $where .= " AND DATE_FORMAT(date_registered, '%Y-%m') = ?";
+        $types .= 's';
+        $params[] = $month;
+    }
+
+    if (preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date)) {
+        $where .= " AND DATE(date_registered) = ?";
+        $types .= 's';
+        $params[] = $date;
+    }
+
+    return [$where, $types, $params];
+}
+
+function fetch_pending_registration_count(mysqli $conn, string $month = '', string $date = ''): int {
+    [$where, $types, $params] = pending_registration_filter($month, $date);
+    $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM users WHERE $where");
+    if ($types !== '') {
+        bind_dynamic_params($stmt, $types, $params);
+    }
+    $stmt->execute();
+    $total = (int)$stmt->get_result()->fetch_assoc()['total'];
+    $stmt->close();
+    return $total;
+}
+
+function fetch_pending_registrations_page(mysqli $conn, int $page, string $month = '', string $date = '', int $perPage = 5): array {
+    $page = max(1, $page);
+    $offset = ($page - 1) * $perPage;
+    [$where, $types, $params] = pending_registration_filter($month, $date);
+    $stmt = $conn->prepare("SELECT * FROM users WHERE $where ORDER BY date_registered ASC LIMIT ? OFFSET ?");
+    $params[] = $perPage;
+    $params[] = $offset;
+    bind_dynamic_params($stmt, $types . 'ii', $params);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $accounts = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $accounts;
+}
+
+function fetch_login_logs(mysqli $conn, string $role, string $month, string $date, int $page, int $perPage = 10): array {
+    $page = max(1, $page);
+    $allowedRoles = $role === 'super_admin' ? ['user', 'admin', 'super_admin'] : ($role === 'admin' ? ['user', 'admin'] : ['user']);
+    $placeholders = implode(',', array_fill(0, count($allowedRoles), '?'));
+    $where = "role IN ($placeholders)";
+    $params = $allowedRoles;
+    $types = str_repeat('s', count($allowedRoles));
+
+    if (preg_match('/^\\d{4}-\\d{2}$/', $month)) {
+        $where .= " AND DATE_FORMAT(time_in, '%Y-%m') = ?";
+        $types .= 's';
+        $params[] = $month;
+    }
+
+    if (preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date)) {
+        $where .= " AND DATE(time_in) = ?";
+        $types .= 's';
+        $params[] = $date;
+    }
+
+    $countStmt = $conn->prepare("SELECT COUNT(*) AS total FROM login_logs WHERE $where");
+    bind_dynamic_params($countStmt, $types, $params);
+    $countStmt->execute();
+    $total = (int)$countStmt->get_result()->fetch_assoc()['total'];
+    $countStmt->close();
+
+    $offset = ($page - 1) * $perPage;
+    $query = "SELECT employee_id, full_name, role, time_in, time_out FROM login_logs WHERE $where ORDER BY time_in DESC LIMIT ? OFFSET ?";
+    $stmt = $conn->prepare($query);
+    $pageParams = $params;
+    $pageTypes = $types . 'ii';
+    $pageParams[] = $perPage;
+    $pageParams[] = $offset;
+    bind_dynamic_params($stmt, $pageTypes, $pageParams);
+    $stmt->execute();
+    $logs = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return ['logs' => $logs, 'total' => $total, 'pages' => max(1, (int)ceil($total / $perPage))];
+}
+
+function bind_dynamic_params(mysqli_stmt $stmt, string $types, array &$params): void {
+    $references = [$types];
+    foreach ($params as $key => &$value) {
+        $references[] = &$value;
+    }
+    call_user_func_array([$stmt, 'bind_param'], $references);
 }
 
 function fetch_delete_requests(mysqli $conn): array {

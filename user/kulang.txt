@@ -1,2 +1,0 @@
-
-ug wala pa nako na test ang error ug htacces(dili maka access sa css,imgs, ug javascript)

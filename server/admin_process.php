@@ -5,7 +5,8 @@ require 'admin_helpers.php';
 
 $alerts = [];
 $role = $_SESSION['role'] ?? '';
-$redirect = admin_redirect_for_role($role);
+$returnPage = is_string($_POST['return_page'] ?? null) ? $_POST['return_page'] : '';
+$redirect = admin_redirect_for_role($role, $returnPage);
 
 function finish_admin_action(array $alerts, string $redirect): void {
     $_SESSION['alerts'] = $alerts;
@@ -18,25 +19,42 @@ if (!isset($_SESSION['user_id']) || !in_array($role, ['admin', 'super_admin'], t
     exit;
 }
 
-if (isset($_POST['change_status_btn'])) {
+if (isset($_POST['change_status_btn']) || isset($_POST['block_account_btn']) || isset($_POST['unblock_account_btn'])) {
     if ($role === 'admin' && !admin_has_privilege('manage_registration')) {
         finish_admin_action([['type' => 'error', 'message' => 'You do not have registration status privileges.']], $redirect);
     }
 
     $targetId = (int)($_POST['target_id'] ?? 0);
     $status = $_POST['account_status'] ?? '';
+    if (isset($_POST['block_account_btn'])) {
+        $status = 'blocked';
+    } elseif (isset($_POST['unblock_account_btn'])) {
+        $status = 'approved';
+    }
 
     if (!in_array($status, ['pending', 'approved', 'blocked'], true)) {
         $alerts[] = ['type' => 'error', 'message' => 'Invalid account status.'];
     } elseif ($targetId === (int)$_SESSION['user_id']) {
         $alerts[] = ['type' => 'error', 'message' => 'You cannot change your own account status.'];
     } else {
-        $stmt = $conn->prepare("UPDATE users SET account_status = ? WHERE id = ?");
-        $stmt->bind_param("si", $status, $targetId);
-        $alerts[] = $stmt->execute()
-            ? ['type' => 'success', 'message' => 'Account status updated.']
-            : ['type' => 'error', 'message' => 'Unable to update account status.'];
-        $stmt->close();
+        $targetStmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
+        $targetStmt->bind_param("i", $targetId);
+        $targetStmt->execute();
+        $target = $targetStmt->get_result()->fetch_assoc();
+        $targetStmt->close();
+
+        if (!$target) {
+            $alerts[] = ['type' => 'error', 'message' => 'Account not found.'];
+        } elseif ($role === 'admin' && $target['role'] === 'super_admin') {
+            $alerts[] = ['type' => 'error', 'message' => 'Administrators cannot change a super admin account.'];
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET account_status = ? WHERE id = ?");
+            $stmt->bind_param("si", $status, $targetId);
+            $alerts[] = $stmt->execute()
+                ? ['type' => 'success', 'message' => $status === 'blocked' ? 'Account blocked.' : 'Account unblocked and approved.']
+                : ['type' => 'error', 'message' => 'Unable to update account status.'];
+            $stmt->close();
+        }
     }
 
     finish_admin_action($alerts, $redirect);

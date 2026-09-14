@@ -28,7 +28,7 @@ if (isset($_POST['login_btn'])) {
         $alerts[] = ['type' => 'error', 'message' => 'Username and password are required.'];
         $_SESSION['last_failure_type'] = 'empty';
     } else {
-        $stmt = $conn->prepare("SELECT id, username, password_hash, first_name, role, account_status, privileges FROM users WHERE username = ? OR email = ?");
+        $stmt = $conn->prepare("SELECT id, user_id, first_name, middle_name, last_name, extension_name, username, password_hash, role, account_status, privileges FROM users WHERE username = ? OR email = ?");
         $stmt->bind_param("ss", $username, $username);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -53,6 +53,12 @@ if (isset($_POST['login_btn'])) {
                 $_SESSION['name'] = $user['first_name'];
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['privileges'] = $user['privileges'] ?? '';
+                $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? '') . ' ' . ($user['last_name'] ?? '') . ' ' . ($user['extension_name'] ?? ''));
+                $logStmt = $conn->prepare("INSERT INTO login_logs (user_id, employee_id, full_name, role, time_in) VALUES (?, ?, ?, ?, NOW())");
+                $logStmt->bind_param("isss", $user['id'], $user['user_id'], $fullName, $user['role']);
+                $logStmt->execute();
+                $_SESSION['login_log_id'] = $conn->insert_id;
+                $logStmt->close();
                 $_SESSION['failed_attempts'] = 0;
                 $_SESSION['cred_failed_attempts'] = 0;
                 unset($_SESSION['lockout_until'], $_SESSION['last_failure_type']);
@@ -391,6 +397,14 @@ if (isset($_POST['save_questions_btn'])) {
     $a1 = trim($_POST['answer_1'] ?? '');
     $a2 = trim($_POST['answer_2'] ?? '');
     $a3 = trim($_POST['answer_3'] ?? '');
+    $allowedQuestions = [
+        'mothers_maiden_name',
+        'first_school',
+        'first_pet',
+        'birth_city',
+        'favorite_media',
+        'childhood_friend',
+    ];
 
     if ($id_number === '') {
         $alerts[] = ['type' => 'error', 'message' => 'Missing ID number for security questions. Please register again.'];
@@ -402,6 +416,9 @@ if (isset($_POST['save_questions_btn'])) {
     }
     if (count(array_unique($questions)) < 3) {
         $alerts[] = ['type' => 'error', 'message' => 'Security questions must be different from each other.'];
+    }
+    if (count(array_diff($questions, $allowedQuestions)) > 0) {
+        $alerts[] = ['type' => 'error', 'message' => 'Please choose valid security questions.'];
     }
     if ($a1 === '' || $a2 === '' || $a3 === '') {
         $alerts[] = ['type' => 'error', 'message' => 'All security question answers are required.'];
