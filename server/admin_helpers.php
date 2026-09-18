@@ -11,7 +11,15 @@ function require_admin_role(array $allowedRoles): void {
     }
 }
 
-function admin_redirect_for_role(string $role): string {
+function admin_redirect_for_role(string $role, string $returnPage = ''): string {
+    if ($role === 'super_admin' && in_array($returnPage, ['pending.php', 'accounts.php', 'logs.php', 'my_account.php'], true)) {
+        return '../super%20admin/' . $returnPage;
+    }
+
+    if ($role === 'admin' && in_array($returnPage, ['pending.php', 'user_management.php', 'logs.php', 'my_account.php'], true)) {
+        return '../admin/' . $returnPage;
+    }
+
     return $role === 'super_admin' ? '../super%20admin/dashboard.php' : '../admin/dashboard.php';
 }
 
@@ -28,13 +36,78 @@ function full_name(array $user): string {
     return trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? '') . ' ' . ($user['last_name'] ?? '') . ' ' . ($user['extension_name'] ?? ''));
 }
 
-function fetch_accounts(mysqli $conn, string $employeeId = ''): array {
+function fetch_dashboard_stats(mysqli $conn, string $role): array {
+    $accountScope = $role === 'admin' ? " AND role <> 'super_admin'" : '';
+    $logScope = $role === 'admin' ? " AND role <> 'super_admin'" : '';
+    $stats = [
+        'accounts' => 0,
+        'active_accounts' => 0,
+        'pending' => 0,
+        'new_accounts' => 0,
+        'logins_today' => 0,
+        'active_sessions' => 0,
+        'recent_logins' => [],
+    ];
+
+    $queries = [
+        'accounts' => "SELECT COUNT(*) AS total FROM users WHERE 1=1$accountScope",
+        'active_accounts' => "SELECT COUNT(*) AS total FROM users WHERE account_status = 'approved'$accountScope",
+        'pending' => "SELECT COUNT(*) AS total FROM users WHERE role = 'user' AND account_status = 'pending'",
+        'new_accounts' => "SELECT COUNT(*) AS total FROM users WHERE date_registered >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')$accountScope",
+        'logins_today' => "SELECT COUNT(*) AS total FROM login_logs WHERE DATE(time_in) = CURRENT_DATE$logScope",
+        'active_sessions' => "SELECT COUNT(*) AS total FROM login_logs WHERE time_out IS NULL$logScope",
+    ];
+
+    foreach ($queries as $key => $query) {
+        $result = $conn->query($query);
+        $stats[$key] = $result ? (int)$result->fetch_assoc()['total'] : 0;
+    }
+
+    $recentResult = $conn->query("SELECT employee_id, full_name, role, time_in, time_out FROM login_logs WHERE 1=1$logScope ORDER BY time_in DESC LIMIT 5");
+    $stats['recent_logins'] = $recentResult ? $recentResult->fetch_all(MYSQLI_ASSOC) : [];
+
+    return $stats;
+}
+
+function fetch_accounts(mysqli $conn, string $employeeId = '', string $search = '', string $role = '', string $status = '', string $sort = 'newest'): array {
+    $conditions = [];
+    $params = [];
+    $types = '';
+
     if ($employeeId !== '') {
-        $like = '%' . $employeeId . '%';
-        $stmt = $conn->prepare("SELECT * FROM users WHERE user_id LIKE ? ORDER BY date_registered DESC");
-        $stmt->bind_param("s", $like);
-    } else {
-        $stmt = $conn->prepare("SELECT * FROM users ORDER BY date_registered DESC");
+        $conditions[] = 'user_id LIKE ?';
+        $params[] = '%' . $employeeId . '%';
+        $types .= 's';
+    }
+
+    if ($search !== '') {
+        $conditions[] = '(first_name LIKE ? OR middle_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR username LIKE ?)';
+        $searchLike = '%' . $search . '%';
+        array_push($params, $searchLike, $searchLike, $searchLike, $searchLike, $searchLike);
+        $types .= 'sssss';
+    }
+
+    if (in_array($role, ['user', 'admin', 'super_admin'], true)) {
+        $conditions[] = 'role = ?';
+        $params[] = $role;
+        $types .= 's';
+    }
+
+    if (in_array($status, ['pending', 'approved', 'blocked'], true)) {
+        $conditions[] = 'account_status = ?';
+        $params[] = $status;
+        $types .= 's';
+    }
+
+    $where = $conditions ? ' WHERE ' . implode(' AND ', $conditions) : '';
+    $orderBy = $sort === 'oldest' ? 'date_registered ASC' : ($sort === 'name' ? 'last_name ASC, first_name ASC' : 'date_registered DESC');
+    $stmt = $conn->prepare("SELECT * FROM users$where ORDER BY $orderBy");
+    if ($types !== '') {
+        $references = [$types];
+        foreach ($params as $key => &$value) {
+            $references[] = &$value;
+        }
+        call_user_func_array([$stmt, 'bind_param'], $references);
     }
 
     $stmt->execute();

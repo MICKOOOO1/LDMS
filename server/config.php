@@ -74,6 +74,19 @@ ensure_table($conn, 'delete_requests', "CREATE TABLE delete_requests (
     CONSTRAINT fk_delete_request_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
 )");
 
+ensure_table($conn, 'login_logs', "CREATE TABLE login_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    employee_id VARCHAR(15) NOT NULL,
+    full_name VARCHAR(160) NOT NULL,
+    role ENUM('user','admin','super_admin') NOT NULL,
+    time_in DATETIME NOT NULL,
+    time_out DATETIME NULL,
+    INDEX idx_login_logs_time_in (time_in),
+    INDEX idx_login_logs_role (role),
+    INDEX idx_login_logs_user_id (user_id)
+)");
+
 $result = $conn->query("SELECT COUNT(*) AS total FROM users WHERE role = 'super_admin'");
 $superAdminCount = $result ? (int)$result->fetch_assoc()['total'] : 0;
 if ($superAdminCount === 0) {

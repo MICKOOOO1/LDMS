@@ -5,7 +5,8 @@ require 'admin_helpers.php';
 
 $alerts = [];
 $role = $_SESSION['role'] ?? '';
-$redirect = admin_redirect_for_role($role);
+$returnPage = is_string($_POST['return_page'] ?? null) ? $_POST['return_page'] : '';
+$redirect = admin_redirect_for_role($role, $returnPage);
 
 function finish_admin_action(array $alerts, string $redirect): void {
     $_SESSION['alerts'] = $alerts;

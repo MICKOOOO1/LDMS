@@ -8,8 +8,13 @@ $alerts = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
 
 $employeeId = trim($_GET['employee_id'] ?? '');
+$search = trim($_GET['search'] ?? '');
+$roleFilter = trim($_GET['role'] ?? '');
+$statusFilter = trim($_GET['status'] ?? '');
+$sort = trim($_GET['sort'] ?? 'newest');
+$dashboardStats = fetch_dashboard_stats($conn, 'super_admin');
 $pendingRegistrations = fetch_pending_registrations($conn);
-$accounts = fetch_accounts($conn, $employeeId);
+$accounts = fetch_accounts($conn, $employeeId, $search, $roleFilter, $statusFilter, $sort);
 $deleteRequests = fetch_delete_requests($conn);
 ?>
 <!DOCTYPE html>
@@ -25,10 +30,17 @@ $deleteRequests = fetch_delete_requests($conn);
 <header>
     <a href="dashboard.php" class="logo"><img src="../assets/imgs/logo.png" alt="CSUCC Logo"> CSUCC LDMS</a>
     <nav>
-        <span><?= htmlspecialchars($_SESSION['name'] ?? 'Super Admin'); ?></span>
-        <a href="../user/logout.php">Logout</a>
+        <a href="dashboard.php" class="active">Dashboard</a>
+        <a href="accounts.php">User Management</a>
+        <a href="pending.php">Pending Approval</a>
+        <a href="logs.php">System Logs</a>
+        <a href="my_account.php">My Account</a>
     </nav>
 </header>
+<div class="topbar">
+    <span><?= htmlspecialchars($_SESSION['name'] ?? 'Super Admin'); ?></span>
+    <a href="../user/logout.php">Logout</a>
+</div>
 
 <main>
     <?php foreach ($alerts as $alert): ?>
@@ -37,10 +49,28 @@ $deleteRequests = fetch_delete_requests($conn);
 
     <section class="page-heading">
         <h1>Super Admin</h1>
-        <p>Manage registrations, privileges, account updates, and account deletion.</p>
+        <p>Monitor the whole system, manage administrators, and oversee account activity.</p>
     </section>
 
-    <section class="panel">
+    <section class="stat-grid" aria-label="System summary">
+        <a class="stat-card" href="#accounts"><span class="stat-label">Total Accounts</span><strong><?= $dashboardStats['accounts']; ?></strong><span>All registered accounts</span></a>
+        <a class="stat-card" href="#accounts"><span class="stat-label">Active Accounts</span><strong><?= $dashboardStats['active_accounts']; ?></strong><span>Approved accounts</span></a>
+        <a class="stat-card" href="#pending-registrations"><span class="stat-label">Pending Approvals</span><strong><?= $dashboardStats['pending']; ?></strong><span>Waiting for review</span></a>
+        <a class="stat-card" href="logs.php"><span class="stat-label">Logins Today</span><strong><?= $dashboardStats['logins_today']; ?></strong><span><?= $dashboardStats['active_sessions']; ?> active sessions</span></a>
+        <a class="stat-card" href="#accounts"><span class="stat-label">Added This Month</span><strong><?= $dashboardStats['new_accounts']; ?></strong><span>New registrations</span></a>
+    </section>
+
+    <section class="panel dashboard-activity">
+        <div class="section-bar"><h2>Recent Login Activity</h2><a href="logs.php">View all logs</a></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>ID Number</th><th>Full Name</th><th>Role</th><th>Time In</th><th>Time Out</th></tr></thead><tbody>
+        <?php foreach ($dashboardStats['recent_logins'] as $log): ?>
+            <tr><td><?= htmlspecialchars($log['employee_id']); ?></td><td><?= htmlspecialchars($log['full_name']); ?></td><td><?= htmlspecialchars($log['role']); ?></td><td><?= htmlspecialchars($log['time_in']); ?></td><td><?= htmlspecialchars($log['time_out'] ?? 'Active session'); ?></td></tr>
+        <?php endforeach; ?>
+        <?php if (empty($dashboardStats['recent_logins'])): ?><tr><td colspan="5">No login activity recorded yet.</td></tr><?php endif; ?>
+        </tbody></table></div>
+    </section>
+
+    <section class="panel" id="pending-registrations">
         <div class="section-bar">
             <h2>Pending Registrations</h2>
             <span class="count-badge"><?= count($pendingRegistrations); ?> waiting</span>
@@ -75,7 +105,7 @@ $deleteRequests = fetch_delete_requests($conn);
         </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="accounts">
         <h2>Create Administrator</h2>
         <form action="../server/admin_process.php" method="POST" class="grid-form">
             <label>Role
@@ -121,26 +151,28 @@ $deleteRequests = fetch_delete_requests($conn);
     <section class="panel">
         <div class="section-bar">
             <h2>Accounts</h2>
-            <form method="GET" class="filter-form">
-                <input type="text" name="employee_id" value="<?= htmlspecialchars($employeeId); ?>" placeholder="Filter by Employee ID">
-                <button type="submit"><i class='bx bx-search'></i> Filter</button>
+            <form method="GET" class="directory-toolbar">
+                <label class="search-field"><i class="bx bx-search"></i><input type="search" name="search" value="<?= htmlspecialchars($search); ?>" placeholder="Search users..."></label>
+                <input type="text" name="employee_id" value="<?= htmlspecialchars($employeeId); ?>" placeholder="Employee ID">
+                <select name="role" aria-label="Filter by role"><option value="">All roles</option><option value="user" <?= $roleFilter === 'user' ? 'selected' : ''; ?>>Customer</option><option value="admin" <?= $roleFilter === 'admin' ? 'selected' : ''; ?>>Admin</option><option value="super_admin" <?= $roleFilter === 'super_admin' ? 'selected' : ''; ?>>Super Admin</option></select>
+                <select name="status" aria-label="Filter by status"><option value="">All status</option><option value="approved" <?= $statusFilter === 'approved' ? 'selected' : ''; ?>>Approved / Active</option><option value="pending" <?= $statusFilter === 'pending' ? 'selected' : ''; ?>>Pending</option><option value="blocked" <?= $statusFilter === 'blocked' ? 'selected' : ''; ?>>Blocked</option></select>
+                <select name="sort" aria-label="Sort accounts"><option value="newest" <?= $sort === 'newest' ? 'selected' : ''; ?>>Newest first</option><option value="oldest" <?= $sort === 'oldest' ? 'selected' : ''; ?>>Oldest first</option><option value="name" <?= $sort === 'name' ? 'selected' : ''; ?>>Name A-Z</option></select>
+                <button type="submit">Filter</button>
                 <a href="dashboard.php">Clear</a>
             </form>
         </div>
 
-        <div class="account-list">
+        <div class="table-wrap">
+            <table class="data-table account-table">
+                <thead><tr><th>ID Number</th><th>Full Name</th><th>Email Address</th><th>Username</th><th>Role</th><th>Approval</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
             <?php foreach ($accounts as $account): ?>
-                <article class="account-card">
-                    <div class="account-top">
-                        <div>
-                            <h3><?= htmlspecialchars(full_name($account)); ?></h3>
-                            <p><?= htmlspecialchars($account['user_id']); ?> · <?= htmlspecialchars($account['username']); ?> · <?= htmlspecialchars($account['email']); ?></p>
-                        </div>
-                        <div class="badges">
-                            <span><?= htmlspecialchars($account['role']); ?></span>
-                            <span><?= htmlspecialchars($account['account_status']); ?></span>
-                        </div>
-                    </div>
+                <tr>
+                    <td><?= htmlspecialchars($account['user_id']); ?></td><td class="name-cell"><?= htmlspecialchars(full_name($account)); ?></td><td><?= htmlspecialchars($account['email']); ?></td><td><?= htmlspecialchars($account['username']); ?></td>
+                    <td><span class="role-pill role-<?= htmlspecialchars($account['role']); ?>"><?= $account['role'] === 'user' ? 'Customer' : ($account['role'] === 'admin' ? 'Admin' : 'Super Admin'); ?></span></td>
+                    <td><span class="status-pill approval-<?= htmlspecialchars($account['account_status']); ?>"><?= $account['account_status'] === 'pending' ? 'Pending' : 'Approved'; ?></span></td>
+                    <td><span class="status-pill status-<?= htmlspecialchars($account['account_status']); ?>"><?= $account['account_status'] === 'pending' ? 'Pending First Login' : ucfirst($account['account_status'] === 'approved' ? 'active' : $account['account_status']); ?></span></td>
+                    <td><details class="row-actions"><summary aria-label="Actions for <?= htmlspecialchars(full_name($account)); ?>">&#8942;</summary><div class="action-menu">
 
                     <form action="../server/admin_process.php" method="POST" class="inline-form">
                         <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
@@ -185,8 +217,12 @@ $deleteRequests = fetch_delete_requests($conn);
                             <button type="submit" name="delete_account_btn" class="danger">Delete Account</button>
                         </form>
                     <?php endif; ?>
-                </article>
+                    </div></details></td>
+                </tr>
             <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
         </div>
     </section>
 
