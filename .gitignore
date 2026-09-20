@@ -1,0 +1,6 @@
+# User-uploaded files (profile pictures) should not be committed
+assets/uploads/
+
+# OS / editor noise
+Thumbs.db
+.DS_Store

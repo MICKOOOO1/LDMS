@@ -70,6 +70,19 @@ CREATE TABLE delete_requests (
     CONSTRAINT fk_delete_request_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
+CREATE TABLE login_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    employee_id VARCHAR(15) NOT NULL,
+    full_name VARCHAR(160) NOT NULL,
+    role ENUM('user','admin','super_admin') NOT NULL,
+    time_in DATETIME NOT NULL,
+    time_out DATETIME NULL,
+    INDEX idx_login_logs_time_in (time_in),
+    INDEX idx_login_logs_role (role),
+    INDEX idx_login_logs_user_id (user_id)
+);
+
 INSERT INTO users (
     user_id, first_name, middle_name, last_name, extension_name, dob, age, sex,
     email, username, password_hash, role, account_status, privileges,

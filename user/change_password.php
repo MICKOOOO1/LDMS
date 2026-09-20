@@ -1,15 +1,18 @@
 <?php
 session_start();
 
-// Retrieve session variables or set defaults
-$name = $_SESSION['name'] ?? null; // first name (used elsewhere)
-$username = $_SESSION['username'] ?? '';
 $alerts = $_SESSION['alerts'] ?? [];
-$active_form = $_SESSION['active_form'] ?? '';
-$user_id = $_SESSION['change_password_user_id'] ?? '';
+unset($_SESSION['alerts']);
 
-// Clear only alert-related session variables, preserve others (like change_password_user_id)
-unset($_SESSION['alerts'], $_SESSION['active_form']);
+// Check if user is verified for password reset
+$reset_verified = $_SESSION['reset_verified'] ?? false;
+$reset_user_id = $_SESSION['reset_user_id'] ?? 0;
+
+if (!$reset_verified || !$reset_user_id) {
+    // Not verified, redirect to forgot password
+    header("Location: forgot_password.php");
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -45,8 +48,7 @@ unset($_SESSION['alerts'], $_SESSION['active_form']);
 
     <div class="auth-modal show">
         <div class="form-box change-password">
-            <h2>Change Password</h2>
-            <p>User ID Number: <?= htmlspecialchars($user_id) ?></p>
+            <h2>Reset Password</h2>
             <form action="../server/auth_process.php" method="POST" novalidate>
 
                 <div class="input-box full-width">

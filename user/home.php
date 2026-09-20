@@ -40,7 +40,9 @@ unset($_SESSION['alerts'], $_SESSION['active_form']);
     </a>
     <nav>
         <?php if (!empty($name)): ?>
-            <span class="hello">Hello, <?= htmlspecialchars($name); ?></span>
+            <a href="my_account.php" class="hello">Hello, <?= htmlspecialchars($name); ?></a>
+            <a href="home.php" class="login-btn-modal">Home</a>
+            <a href="logs.php" class="login-btn-modal">Logs</a>
             <a href="logout.php" class="login-btn-modal">Logout</a>
         <?php else: ?>
             <a href="login.php" class="login-btn-modal">Login</a>

@@ -4,6 +4,252 @@ require 'config.php';
 
 $alerts = [];
 
+function auth_allowed_security_questions(): array {
+    return [
+        'first_pet',
+        'childhood_nickname',
+        'favorite_subject',
+        'mothers_maiden_name',
+        'dream_job',
+        'first_travel',
+        'first_school',
+        'childhood_friend',
+        'birth_city',
+    ];
+}
+
+function auth_finish_security_setup(mysqli $conn, int $numericUserId, string $publicUserId, array $post, array &$alerts): bool {
+    $q1 = $post['question_1'] ?? '';
+    $q2 = $post['question_2'] ?? '';
+    $q3 = $post['question_3'] ?? '';
+    $a1 = trim($post['answer_1'] ?? '');
+    $a2 = trim($post['answer_2'] ?? '');
+    $a3 = trim($post['answer_3'] ?? '');
+    $questions = [$q1, $q2, $q3];
+
+    if (in_array('', $questions, true) || $a1 === '' || $a2 === '' || $a3 === '') {
+        $alerts[] = ['type' => 'error', 'message' => 'All security questions and answers are required.'];
+    }
+
+    if (count(array_unique($questions)) < 3) {
+        $alerts[] = ['type' => 'error', 'message' => 'Security questions must be different from each other.'];
+    }
+
+    if (count(array_diff($questions, auth_allowed_security_questions())) > 0) {
+        $alerts[] = ['type' => 'error', 'message' => 'Please choose valid security questions.'];
+    }
+
+    if (!empty($alerts)) {
+        return false;
+    }
+
+    $deleteStmt = $conn->prepare("DELETE FROM security_questions WHERE user_id = ?");
+    $deleteStmt->bind_param("s", $publicUserId);
+    $deleteStmt->execute();
+    $deleteStmt->close();
+
+    $insertStmt = $conn->prepare("INSERT INTO security_questions (user_id, question_code, answer_hash) VALUES (?, ?, ?)");
+    foreach ([[$q1, $a1], [$q2, $a2], [$q3, $a3]] as $entry) {
+        [$question, $answer] = $entry;
+        $hash = password_hash($answer, PASSWORD_DEFAULT);
+        $insertStmt->bind_param("sss", $publicUserId, $question, $hash);
+        if (!$insertStmt->execute()) {
+            $alerts[] = ['type' => 'error', 'message' => 'Failed to save security questions. Please try again.'];
+            $insertStmt->close();
+            return false;
+        }
+    }
+    $insertStmt->close();
+
+    $setupStmt = $conn->prepare("UPDATE users SET setup_completed = 1 WHERE id = ?");
+    $setupStmt->bind_param("i", $numericUserId);
+    $saved = $setupStmt->execute();
+    $setupStmt->close();
+
+    if (!$saved) {
+        $alerts[] = ['type' => 'error', 'message' => 'Unable to complete account setup.'];
+        return false;
+    }
+
+    return true;
+}
+
+// ================= COMPLETE ACCOUNT SETUP AFTER ACTIVATION =================
+if (isset($_POST['complete_account_setup_btn']) || (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['question_1'], $_POST['answer_1']) && isset($_SESSION['activation_setup_user_id']))) {
+    $setupUserId = (int)($_SESSION['activation_setup_user_id'] ?? 0);
+    if (!$setupUserId) {
+        $_SESSION['alerts'] = [['type' => 'error', 'message' => 'Setup session expired. Please log in again.']];
+        header('Location: ../user/login.php');
+        exit;
+    }
+
+    $stmt = $conn->prepare("SELECT user_id FROM users WHERE id = ? AND account_status = 'approved' LIMIT 1");
+    $stmt->bind_param("i", $setupUserId);
+    $stmt->execute();
+    $account = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$account) {
+        unset($_SESSION['activation_setup_user_id']);
+        $_SESSION['alerts'] = [['type' => 'error', 'message' => 'Account setup is unavailable. Please log in again.']];
+        header('Location: ../user/login.php');
+        exit;
+    }
+
+    $firstName = trim($_POST['first_name'] ?? '');
+    $middleName = trim($_POST['middle_name'] ?? '');
+    $lastName = trim($_POST['last_name'] ?? '');
+    $extensionName = trim($_POST['extension_name'] ?? '');
+    $dob = $_POST['dob'] ?? '';
+    $age = (int)($_POST['age'] ?? 0);
+    $sex = $_POST['sex'] ?? '';
+    $email = trim($_POST['email'] ?? '');
+    $username = trim($_POST['username'] ?? '');
+    $purokStreet = trim($_POST['purok_street'] ?? '');
+    $barangay = trim($_POST['barangay'] ?? '');
+    $city = trim($_POST['city_municipality'] ?? '');
+    $province = trim($_POST['province'] ?? '');
+    $country = trim($_POST['country'] ?? '');
+    $zipCode = trim($_POST['zip_code'] ?? '');
+
+    if ($firstName === '' || $lastName === '' || $dob === '' || $age <= 0 || !in_array($sex, ['male', 'female'], true) || $email === '' || $username === '' || $purokStreet === '' || $barangay === '' || $city === '' || $province === '' || $country === '' || $zipCode === '') {
+        $alerts[] = ['type' => 'error', 'message' => 'Please complete all profile fields.'];
+    }
+
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Please enter a valid email address.'];
+    }
+
+    if (empty($alerts)) {
+        $duplicateStmt = $conn->prepare("SELECT id FROM users WHERE (email = ? OR username = ?) AND id <> ? LIMIT 1");
+        $duplicateStmt->bind_param("ssi", $email, $username, $setupUserId);
+        $duplicateStmt->execute();
+        $duplicate = $duplicateStmt->get_result()->fetch_assoc();
+        $duplicateStmt->close();
+
+        if ($duplicate) {
+            $alerts[] = ['type' => 'error', 'message' => 'Email or username is already used by another account.'];
+        }
+    }
+
+    if (empty($alerts)) {
+        $updateStmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, dob=?, age=?, sex=?, email=?, username=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
+        $updateStmt->bind_param("sssssisssssssssi", $firstName, $middleName, $lastName, $extensionName, $dob, $age, $sex, $email, $username, $purokStreet, $barangay, $city, $province, $country, $zipCode, $setupUserId);
+        if (!$updateStmt->execute()) {
+            $alerts[] = ['type' => 'error', 'message' => 'Unable to save profile details.'];
+        }
+        $updateStmt->close();
+    }
+
+    if (empty($alerts) && auth_finish_security_setup($conn, $setupUserId, $account['user_id'], $_POST, $alerts)) {
+        unset($_SESSION['activation_setup_user_id']);
+        $_SESSION['alerts'] = [['type' => 'success', 'message' => 'Account setup completed. You can now log in.']];
+        header('Location: ../user/login.php');
+        exit;
+    }
+
+    $_SESSION['alerts'] = $alerts;
+    header('Location: ../user/complete_account_setup.php');
+    exit;
+}
+
+// ================= USER PROFILE UPDATE =================
+if (isset($_POST['update_profile_btn'])) {
+    if (!isset($_SESSION['user_id'])) {
+        header('Location: ../user/login.php');
+        exit;
+    }
+
+    $userId = (int)$_SESSION['user_id'];
+    $firstName = trim($_POST['first_name'] ?? '');
+    $middleName = trim($_POST['middle_name'] ?? '');
+    $lastName = trim($_POST['last_name'] ?? '');
+    $extensionName = trim($_POST['extension_name'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $username = trim($_POST['username'] ?? '');
+    $purokStreet = trim($_POST['purok_street'] ?? '');
+    $barangay = trim($_POST['barangay'] ?? '');
+    $city = trim($_POST['city_municipality'] ?? '');
+    $province = trim($_POST['province'] ?? '');
+    $country = trim($_POST['country'] ?? '');
+    $zipCode = trim($_POST['zip_code'] ?? '');
+    $profilePicture = null;
+
+    if ($firstName === '' || $lastName === '' || $email === '' || $username === '') {
+        $alerts[] = ['type' => 'error', 'message' => 'First name, last name, email, and username are required.'];
+    }
+
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Please enter a valid email address.'];
+    }
+
+    if (empty($alerts)) {
+        $stmt = $conn->prepare("SELECT id FROM users WHERE (email = ? OR username = ?) AND id <> ? LIMIT 1");
+        $stmt->bind_param("ssi", $email, $username, $userId);
+        $stmt->execute();
+        $duplicate = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if ($duplicate) {
+            $alerts[] = ['type' => 'error', 'message' => 'Email or username is already used by another account.'];
+        }
+    }
+
+    if (empty($alerts) && isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $file = $_FILES['profile_picture'];
+        $allowedTypes = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            $alerts[] = ['type' => 'error', 'message' => 'Profile picture upload failed. Please try again.'];
+        } elseif ($file['size'] > 2 * 1024 * 1024) {
+            $alerts[] = ['type' => 'error', 'message' => 'Profile picture must be 2MB or smaller.'];
+        } else {
+            $imageInfo = getimagesize($file['tmp_name']);
+            $mimeType = $imageInfo['mime'] ?? '';
+
+            if (!isset($allowedTypes[$mimeType])) {
+                $alerts[] = ['type' => 'error', 'message' => 'Profile picture must be JPG, PNG, or WEBP.'];
+            } else {
+                $uploadDir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'profiles';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0775, true);
+                }
+
+                $fileName = 'profile_' . $userId . '_' . time() . '.' . $allowedTypes[$mimeType];
+                $destination = $uploadDir . DIRECTORY_SEPARATOR . $fileName;
+
+                if (move_uploaded_file($file['tmp_name'], $destination)) {
+                    $profilePicture = 'assets/uploads/profiles/' . $fileName;
+                } else {
+                    $alerts[] = ['type' => 'error', 'message' => 'Unable to save the profile picture.'];
+                }
+            }
+        }
+    }
+
+    if (empty($alerts)) {
+        if ($profilePicture !== null) {
+            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, username=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=?, profile_picture=? WHERE id=?");
+            $stmt->bind_param("sssssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $username, $purokStreet, $barangay, $city, $province, $country, $zipCode, $profilePicture, $userId);
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, username=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
+            $stmt->bind_param("ssssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $username, $purokStreet, $barangay, $city, $province, $country, $zipCode, $userId);
+        }
+
+        if ($stmt->execute()) {
+            $_SESSION['name'] = $firstName;
+            $alerts[] = ['type' => 'success', 'message' => 'Profile updated successfully.'];
+        } else {
+            $alerts[] = ['type' => 'error', 'message' => 'Unable to update profile. Please try again.'];
+        }
+        $stmt->close();
+    }
+
+    $_SESSION['alerts'] = $alerts;
+    header('Location: ../user/my_account.php');
+    exit;
+}
+
 // ================= LOGIN =================
 if (isset($_POST['login_btn'])) {
     if (!isset($_SESSION['failed_attempts'])) {
@@ -28,7 +274,7 @@ if (isset($_POST['login_btn'])) {
         $alerts[] = ['type' => 'error', 'message' => 'Username and password are required.'];
         $_SESSION['last_failure_type'] = 'empty';
     } else {
-        $stmt = $conn->prepare("SELECT id, user_id, username, password_hash, first_name, middle_name, last_name, extension_name, role, account_status, privileges FROM users WHERE username = ? OR email = ?");
+        $stmt = $conn->prepare("SELECT id, user_id, first_name, middle_name, last_name, extension_name, email, username, password_hash, role, account_status, privileges, setup_completed FROM users WHERE username = ? OR email = ?");
         $stmt->bind_param("ss", $username, $username);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -42,11 +288,19 @@ if (isset($_POST['login_btn'])) {
             $user = $result->fetch_assoc();
             if (password_verify($password, $user['password_hash'])) {
                 if ($user['account_status'] === 'pending') {
-                    $alerts[] = ['type' => 'error', 'message' => 'Your registration is pending administrator approval.'];
-                    $_SESSION['last_failure_type'] = 'status';
+                    // Redirect to OTP verification for account activation
+                    $_SESSION['otp_email'] = $user['email'];
+                    $_SESSION['otp_purpose'] = 'account_activation';
+                    $_SESSION['otp_user_id'] = $user['id'];
+                    header("Location: ../user/verify_otp.php?step=otp");
+                    exit;
                 } elseif ($user['account_status'] === 'blocked') {
                     $alerts[] = ['type' => 'error', 'message' => 'Your account is blocked. Please contact the administrator.'];
                     $_SESSION['last_failure_type'] = 'status';
+                } elseif ((int)($user['setup_completed'] ?? 1) === 0) {
+                    $_SESSION['activation_setup_user_id'] = (int)$user['id'];
+                    header("Location: ../user/complete_account_setup.php");
+                    exit;
                 } else {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
@@ -59,6 +313,23 @@ if (isset($_POST['login_btn'])) {
                 $logStmt->execute();
                 $_SESSION['login_log_id'] = $conn->insert_id;
                 $logStmt->close();
+                $sessionToken = bin2hex(random_bytes(32));
+                $_SESSION['session_token'] = $sessionToken;
+
+                if ($user['role'] === 'super_admin') {
+                    $conn->query("UPDATE login_logs SET time_out = NOW() WHERE role = 'super_admin' AND time_out IS NULL AND id <> " . (int)$_SESSION['login_log_id']);
+                    $conn->query("DELETE FROM active_sessions WHERE role = 'super_admin'");
+                } else {
+                    $clearStmt = $conn->prepare("DELETE FROM active_sessions WHERE user_id = ?");
+                    $clearStmt->bind_param("i", $user['id']);
+                    $clearStmt->execute();
+                    $clearStmt->close();
+                }
+
+                $activeStmt = $conn->prepare("INSERT INTO active_sessions (user_id, role, session_token, login_log_id, last_seen) VALUES (?, ?, ?, ?, NOW())");
+                $activeStmt->bind_param("issi", $user['id'], $user['role'], $sessionToken, $_SESSION['login_log_id']);
+                $activeStmt->execute();
+                $activeStmt->close();
                 $_SESSION['failed_attempts'] = 0;
                 $_SESSION['cred_failed_attempts'] = 0;
                 unset($_SESSION['lockout_until'], $_SESSION['last_failure_type']);
@@ -338,7 +609,7 @@ if (isset($_POST['register_btn'])) {
         $alerts[] = ['type' => 'error', 'message' => 'Email Address must be between 5 and 70 characters.'];
     }
 
-    // Check username, email, and user_id uniqueness
+    // Check username, email, and user_id uniqueness (both approved users and pending registrations)
     $stmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ? OR user_id = ?");
     $stmt->bind_param("sss", $username, $email, $user_id);
     $stmt->execute();
@@ -348,37 +619,50 @@ if (isset($_POST['register_btn'])) {
     }
     $stmt->close();
 
-    // ================= IF NO ERRORS, INSERT USER THEN GO TO SECURITY QUESTIONS =================
+    if (empty($alerts)) {
+        $pendingStmt = $conn->prepare("SELECT id FROM pending_registrations WHERE (username = ? OR email = ? OR user_id = ?) AND status = 'pending'");
+        $pendingStmt->bind_param("sss", $username, $email, $user_id);
+        $pendingStmt->execute();
+        $pendingStmt->store_result();
+        if ($pendingStmt->num_rows > 0) {
+            $alerts[] = ['type' => 'error', 'message' => 'Username, Email, or ID Number already has a pending registration.'];
+        }
+        $pendingStmt->close();
+    }
+
+    // ================= IF NO ERRORS, HOLD DATA IN SESSION THEN GO TO SECURITY QUESTIONS =================
     // Log all validation errors for debugging (remove in production)
     if (!empty($alerts)) {
         error_log("Registration validation errors: " . json_encode($alerts));
     }
-    
+
     if (empty($alerts)) {
         $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
-        $role = 'user';
-        $account_status = 'pending';
-        $stmt = $conn->prepare("INSERT INTO users (user_id, first_name, middle_name, last_name, extension_name, dob, age, sex, username, email, password_hash, role, account_status, purok_street, barangay, city_municipality, province, country, zip_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-        $stmt->bind_param(
-            "ssssssissssssssssss",
-            $user_id, $first_name, $middle_name, $last_name, $extension_name,
-            $dob, $age, $sex, $username, $email, $password_hash, $role, $account_status,
-            $purok_street, $barangay, $city_municipality, $province, $country, $zip_code
-        );
-
-        if ($stmt->execute()) {
-            $_SESSION['id_number'] = $user_id;
-            $_SESSION['first_name'] = $first_name;
-            $_SESSION['alerts'] = [['type' => 'success', 'message' => 'Almost done! Please set your security questions.']];
-            header("Location: ../user/security_question.php");
-            exit;
-        } else {
-            // Get detailed error message from database
-            $error_msg = $stmt->error;
-            $alerts[] = ['type' => 'error', 'message' => 'Registration failed: ' . $error_msg . '. Please try again later.'];
-        }
-        $stmt->close();
+        // Hold validated registration in session; nothing is saved until security questions are set.
+        $_SESSION['pending_registration'] = [
+            'user_id' => $user_id,
+            'first_name' => $first_name,
+            'middle_name' => $middle_name,
+            'last_name' => $last_name,
+            'extension_name' => $extension_name,
+            'dob' => $dob,
+            'age' => $age,
+            'sex' => $sex,
+            'username' => $username,
+            'email' => $email,
+            'password_hash' => $password_hash,
+            'purok_street' => $purok_street,
+            'barangay' => $barangay,
+            'city_municipality' => $city_municipality,
+            'province' => $province,
+            'country' => $country,
+            'zip_code' => $zip_code,
+        ];
+        $_SESSION['id_number'] = $user_id;
+        $_SESSION['first_name'] = $first_name;
+        header("Location: ../user/security_question.php");
+        exit;
     }
 
     // If there are errors, show all of them
@@ -389,7 +673,8 @@ if (isset($_POST['register_btn'])) {
     }
 }
 
-if (isset($_POST['save_questions_btn'])) {
+if (isset($_POST['save_questions_btn']) || (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['question_1'], $_POST['answer_1'], $_POST['id_number']) && isset($_SESSION['pending_registration']))) {
+    $pending = $_SESSION['pending_registration'] ?? null;
     $id_number = trim($_POST['id_number'] ?? '');
     $q1 = $_POST['question_1'] ?? '';
     $q2 = $_POST['question_2'] ?? '';
@@ -397,9 +682,27 @@ if (isset($_POST['save_questions_btn'])) {
     $a1 = trim($_POST['answer_1'] ?? '');
     $a2 = trim($_POST['answer_2'] ?? '');
     $a3 = trim($_POST['answer_3'] ?? '');
+    $allowedQuestions = [
+        // Question 1
+        'first_pet',
+        'childhood_nickname',
+        'favorite_subject',
+        // Question 2
+        'mothers_maiden_name',
+        'dream_job',
+        'first_travel',
+        // Question 3
+        'first_school',
+        'childhood_friend',
+        'birth_city',
+    ];
 
     if ($id_number === '') {
         $alerts[] = ['type' => 'error', 'message' => 'Missing ID number for security questions. Please register again.'];
+    }
+
+    if (!$pending || ($pending['user_id'] ?? '') !== $id_number) {
+        $alerts[] = ['type' => 'error', 'message' => 'Registration session expired. Please fill up the registration form again.'];
     }
 
     $questions = [$q1, $q2, $q3];
@@ -409,65 +712,117 @@ if (isset($_POST['save_questions_btn'])) {
     if (count(array_unique($questions)) < 3) {
         $alerts[] = ['type' => 'error', 'message' => 'Security questions must be different from each other.'];
     }
+    if (count(array_diff($questions, $allowedQuestions)) > 0) {
+        $alerts[] = ['type' => 'error', 'message' => 'Please choose valid security questions.'];
+    }
     if ($a1 === '' || $a2 === '' || $a3 === '') {
         $alerts[] = ['type' => 'error', 'message' => 'All security question answers are required.'];
     }
 
     if (empty($alerts)) {
-        // Store hashed answers for better security
-        $stmt = $conn->prepare("INSERT INTO security_questions (user_id, question_code, answer_hash) VALUES (?,?,?)");
+        // Re-check duplicates at final submit (closes double-submit / stale-session races).
+        $dupStmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ? OR user_id = ?");
+        $dupStmt->bind_param("sss", $pending['username'], $pending['email'], $pending['user_id']);
+        $dupStmt->execute();
+        $dupStmt->store_result();
+        if ($dupStmt->num_rows > 0) {
+            $alerts[] = ['type' => 'error', 'message' => 'Username, Email, or ID Number already exists.'];
+        }
+        $dupStmt->close();
+    }
 
-        $entries = [
-            [$id_number, $q1, $a1],
-            [$id_number, $q2, $a2],
-            [$id_number, $q3, $a3],
-        ];
+    if (empty($alerts)) {
+        $dupStmt = $conn->prepare("SELECT id FROM pending_registrations WHERE (username = ? OR email = ? OR user_id = ?) AND status = 'pending'");
+        $dupStmt->bind_param("sss", $pending['username'], $pending['email'], $pending['user_id']);
+        $dupStmt->execute();
+        $dupStmt->store_result();
+        if ($dupStmt->num_rows > 0) {
+            $alerts[] = ['type' => 'error', 'message' => 'This account was already submitted and is waiting for approval.'];
+        }
+        $dupStmt->close();
+    }
 
-        foreach ($entries as $entry) {
-            [$uid, $qc, $ans] = $entry;
-            $hashed = password_hash($ans, PASSWORD_DEFAULT);
-            $stmt->bind_param("sss", $uid, $qc, $hashed);
-            if (!$stmt->execute()) {
-                $alerts[] = ['type' => 'error', 'message' => 'Failed to save security questions. Please try again.'];
-                break;
-            }
+    if (empty($alerts)) {
+        // Final submit: save pending registration together with hashed security answers.
+        $hash1 = password_hash($a1, PASSWORD_DEFAULT);
+        $hash2 = password_hash($a2, PASSWORD_DEFAULT);
+        $hash3 = password_hash($a3, PASSWORD_DEFAULT);
+
+        $stmt = $conn->prepare("INSERT INTO pending_registrations (user_id, first_name, middle_name, last_name, extension_name, dob, age, sex, username, email, password_hash, purok_street, barangay, city_municipality, province, country, zip_code, security_question_1, security_answer_hash_1, security_question_2, security_answer_hash_2, security_question_3, security_answer_hash_3) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+        $stmt->bind_param(
+            "ssssssissssssssssssssss",
+            $pending['user_id'], $pending['first_name'], $pending['middle_name'], $pending['last_name'], $pending['extension_name'],
+            $pending['dob'], $pending['age'], $pending['sex'], $pending['username'], $pending['email'], $pending['password_hash'],
+            $pending['purok_street'], $pending['barangay'], $pending['city_municipality'], $pending['province'], $pending['country'], $pending['zip_code'],
+            $q1, $hash1, $q2, $hash2, $q3, $hash3
+        );
+
+        try {
+            $saved = $stmt->execute();
+        } catch (mysqli_sql_exception $e) {
+            $saved = false;
+            $dbError = $e->getMessage();
+            $dbCode = $e->getCode();
         }
 
-        if (empty($alerts)) {
-            $_SESSION['alerts'] = [['type' => 'success', 'message' => 'Registration completed successfully! Please wait for administrator approval before logging in.']];
+        if (!empty($saved)) {
+            unset($_SESSION['pending_registration'], $_SESSION['id_number'], $_SESSION['first_name'], $_SESSION['selected_questions']);
+            $stmt->close();
+            $_SESSION['alerts'] = [['type' => 'success', 'message' => 'Registration submitted for approval. You will be notified once approved.']];
             header("Location: ../user/login.php");
             exit;
         }
+
+        $error = $dbError ?? $stmt->error;
+        $code = $dbCode ?? 0;
+        if ($code === 1062 || str_contains($error, 'Duplicate entry')) {
+            $alerts[] = ['type' => 'error', 'message' => 'This account was already submitted and is waiting for approval.'];
+        } else {
+            $alerts[] = ['type' => 'error', 'message' => 'Registration failed. Please try again later.'];
+        }
+        $stmt->close();
     }
 
     $_SESSION['alerts'] = $alerts;
     $_SESSION['id_number'] = $id_number;
+    $_SESSION['first_name'] = $pending['first_name'] ?? ($_SESSION['first_name'] ?? null);
+    $_SESSION['selected_questions'] = [$q1, $q2, $q3];
     header("Location: ../user/security_question.php");
     exit;
 }
 
-// ================= FORGOT PASSWORD: STEP 1 (VERIFY ID + USERNAME, LOAD QUESTIONS) =================
-if (isset($_POST['forgot_step1_btn'])) {
-    $id_number = trim($_POST['id_number'] ?? '');
+// ================= FORGOT PASSWORD: REQUEST OTP =================
+if (isset($_POST['forgot_request_otp_btn'])) {
+    $identifier = trim($_POST['identifier'] ?? ''); // email or user_id
 
-    if ($id_number === '') {
-        $alerts[] = ['type' => 'error', 'message' => 'ID number is required.'];
-    }
-
-    if (empty($alerts)) {
-        $stmt = $conn->prepare("SELECT user_id, username FROM users WHERE user_id = ?");
-        $stmt->bind_param("s", $id_number);
+    if ($identifier === '') {
+        $alerts[] = ['type' => 'error', 'message' => 'Email or ID number is required.'];
+    } else {
+        // Find user by email or user_id
+        $stmt = $conn->prepare("SELECT id, user_id, email, first_name, last_name FROM users WHERE email = ? OR user_id = ?");
+        $stmt->bind_param("ss", $identifier, $identifier);
         $stmt->execute();
         $result = $stmt->get_result();
 
         if ($result->num_rows === 0) {
-            $alerts[] = ['type' => 'error', 'message' => 'No account found with that ID number.'];
+            // Don't reveal if account exists
+            $alerts[] = ['type' => 'success', 'message' => 'If the account exists, a reset code has been sent to the registered email.'];
         } else {
-            $userRow = $result->fetch_assoc();
-            // Store details for later steps
-            $_SESSION['forgot_step'] = 2;
-            $_SESSION['forgot_id_number'] = $userRow['user_id'];
-            $_SESSION['forgot_username'] = $userRow['username'];
+            $user = $result->fetch_assoc();
+            $stmt->close();
+
+            $fullName = trim($user['first_name'] . ' ' . $user['last_name']);
+            $otp = create_otp($conn, $user['id'], $user['email'], 'password_reset', $fullName);
+
+            if ($otp) {
+                $_SESSION['otp_email'] = $user['email'];
+                $_SESSION['otp_purpose'] = 'password_reset';
+                $_SESSION['otp_user_id'] = (int)$user['id'];
+                header("Location: ../user/verify_otp.php?step=otp");
+                exit;
+            } else {
+                $alerts[] = ['type' => 'error', 'message' => 'Failed to send reset code. Please try again.'];
+            }
         }
     }
 
@@ -476,99 +831,26 @@ if (isset($_POST['forgot_step1_btn'])) {
     exit;
 }
 
-// ================= FORGOT PASSWORD: BACK BUTTON =================
-if (isset($_POST['forgot_back_btn'])) {
-    // Reset to step 1
-    $_SESSION['forgot_step'] = 1;
-    unset($_SESSION['forgot_id_number'], $_SESSION['forgot_username'], $_SESSION['answer_errors']);
-    header("Location: ../user/forgot_password.php");
-    exit;
-}
-
-// ================= FORGOT PASSWORD: STEP 2 (VERIFY SECURITY QUESTION) =================
-if (isset($_POST['forgot_step2_btn'])) {
-    $id_number = $_SESSION['forgot_id_number'] ?? '';
-    $answers = $_POST['answers'] ?? [];
-
-    if ($id_number === '') {
-        $alerts[] = ['type' => 'error', 'message' => 'Session expired. Please start the forgot password process again.'];
-    }
-
-    // Fetch all question_code and answer_hash for this user
-    $stored = [];
-    if ($id_number !== '') {
-        $stmt = $conn->prepare("SELECT question_code, answer_hash FROM security_questions WHERE user_id = ?");
-        $stmt->bind_param("s", $id_number);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        while ($row = $result->fetch_assoc()) {
-            $stored[$row['question_code']] = $row['answer_hash'];
-        }
-        $stmt->close();
-
-        if (empty($stored)) {
-            $alerts[] = ['type' => 'error', 'message' => 'No security questions found for this account.'];
-        }
-    }
-
-    // Validate that all required answers are provided
-    if (empty($alerts) && !empty($stored)) {
-        foreach ($stored as $code => $_hash) {
-            $ans = trim($answers[$code] ?? '');
-            if ($ans === '') {
-                $alerts[] = ['type' => 'error', 'message' => 'All security questions must be answered.'];
-                break;
-            }
-        }
-    }
-
-    // Verify each answer
-    if (empty($alerts) && !empty($stored)) {
-        $answer_errors = [];
-        $all_ok = true;
-        foreach ($stored as $code => $hash) {
-            $ans = trim($answers[$code] ?? '');
-            if (!password_verify($ans, $hash)) {
-                $answer_errors[$code] = 'Wrong answer.';
-                $all_ok = false;
-            }
-        }
-
-        if ($all_ok) {
-            $_SESSION['change_password_user_id'] = $id_number;
-            $_SESSION['forgot_step'] = 0;
-            header("Location: ../user/change_password.php");
-            exit;
-        } else {
-            $_SESSION['answer_errors'] = $answer_errors;
-        }
-    }
-
-    $_SESSION['alerts'] = $alerts;
-    $_SESSION['forgot_step'] = 2;
-    header("Location: ../user/forgot_password.php");
-    exit;
-}
-
-// ================= CHANGE PASSWORD AFTER SECURITY QUESTION =================
+// ================= CHANGE PASSWORD AFTER OTP VERIFICATION =================
 if (isset($_POST['change_password_btn'])) {
-    $user_id = $_SESSION['change_password_user_id'] ?? '';
+    $user_id = $_SESSION['reset_user_id'] ?? 0;
+
+    if (!$user_id || !($_SESSION['reset_verified'] ?? false)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Session expired. Please complete the forgot password process again.'];
+    }
     $new_password = $_POST['password'] ?? '';
     $re_new_password = $_POST['re_password'] ?? '';
 
-    if ($user_id === '') {
-        $alerts[] = ['type' => 'error', 'message' => 'Session expired. Please complete the forgot password process again.'];
-    }
     if ($new_password === '' || $re_new_password === '') {
         $alerts[] = ['type' => 'error', 'message' => 'Please enter and confirm your new password.'];
     } elseif ($new_password !== $re_new_password) {
         $alerts[] = ['type' => 'error', 'message' => 'New passwords do not match.'];
     }
 
-    if ($user_id !== '' && $new_password !== '' && empty($alerts)) {
+    if ($user_id && $new_password !== '' && empty($alerts)) {
         // Fetch current password hash to prevent reusing the same password
-        $stmt = $conn->prepare("SELECT password_hash FROM users WHERE user_id = ?");
-        $stmt->bind_param("s", $user_id);
+        $stmt = $conn->prepare("SELECT password_hash FROM users WHERE id = ?");
+        $stmt->bind_param("i", $user_id);
         $stmt->execute();
         $stmt->bind_result($current_hash);
 
@@ -586,11 +868,11 @@ if (isset($_POST['change_password_btn'])) {
 
     if (empty($alerts)) {
         $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
-        $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE user_id = ?");
-        $stmt->bind_param("ss", $new_hash, $user_id);
+        $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+        $stmt->bind_param("si", $new_hash, $user_id);
 
         if ($stmt->execute()) {
-            unset($_SESSION['change_password_user_id']);
+            unset($_SESSION['reset_user_id'], $_SESSION['reset_verified']);
             $_SESSION['alerts'] = [['type' => 'success', 'message' => 'Password changed successfully. You can now login.' ]];
             header("Location: ../user/login.php");
             exit;
@@ -601,6 +883,14 @@ if (isset($_POST['change_password_btn'])) {
 
     $_SESSION['alerts'] = $alerts;
     header("Location: ../user/change_password.php");
+    exit;
+}
+
+// Fallback: a POST reached this script without matching any handler
+// (e.g. Enter-key submit that omits the button value). Never white-page.
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $_SESSION['alerts'] = [['type' => 'error', 'message' => 'Invalid request. Please try again.']];
+    header("Location: ../user/login.php");
     exit;
 }
 
