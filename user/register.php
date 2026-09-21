@@ -1,9 +1,13 @@
 <?php
 session_start();
+require '../server/config.php';
+require '../server/admin_helpers.php';
 
 $name = $_SESSION['name'] ?? null;
 $alerts = $_SESSION['alerts'] ?? [];
 $active_form = $_SESSION['active_form'] ?? '';
+
+$generatedUserId = generate_next_id($conn, 'user');
 
 unset($_SESSION['alerts'], $_SESSION['active_form']);
 ?>
@@ -58,7 +62,7 @@ unset($_SESSION['alerts'], $_SESSION['active_form']);
 <!-- ID Number - full width -->
 <div class="input-box">
     <label>ID Number <span class="asterisk">*</span></label>
-    <input type="text" name="id_number" placeholder="xxxx-xxxx" required>
+    <input type="text" name="id_number" id="generatedUserId" value="<?= htmlspecialchars($generatedUserId); ?>" readonly style="background-color: #e8e8e8; color: #666;">
     <small class="input-message"></small>
 </div>
 

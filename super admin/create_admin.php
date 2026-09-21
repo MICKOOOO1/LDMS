@@ -7,6 +7,10 @@ require '_header.php';
 
 $alerts = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
+
+$roleForId = $_POST['role'] ?? 'admin';
+$generatedId = generate_next_id($conn, $roleForId);
+
 render_super_admin_header('Create Administrator', 'create');
 ?>
 <section class="page-heading">
@@ -22,13 +26,13 @@ render_super_admin_header('Create Administrator', 'create');
     <form action="../server/admin_process.php" method="POST" class="grid-form">
         <input type="hidden" name="return_page" value="create_admin.php">
         <label>Role
-            <select name="role" required>
-                <option value="admin">Administrator</option>
-                <option value="super_admin">Super Administrator</option>
+            <select name="role" id="roleSelect" required onchange="updateGeneratedId(this.value)">
+                <option value="admin"<?= $roleForId === 'admin' ? ' selected' : ''; ?>>Administrator</option>
+                <option value="super_admin"<?= $roleForId === 'super_admin' ? ' selected' : ''; ?>>Super Administrator</option>
             </select>
         </label>
         <label>Employee ID
-            <input type="text" name="id_number" placeholder="xxxx-xxxx" required>
+            <input type="text" name="id_number" id="generatedId" value="<?= htmlspecialchars($generatedId); ?>" readonly style="background-color: #e8e8e8; color: #666;">
         </label>
         <label>First Name
             <input type="text" name="first_name" required>
@@ -61,3 +65,18 @@ render_super_admin_header('Create Administrator', 'create');
     </form>
 </section>
 <?php render_super_admin_footer(); ?>
+
+<script>
+function updateGeneratedId(role) {
+    fetch('../server/generate_id.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'role=' + encodeURIComponent(role)
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('generatedId').value = data.id;
+    })
+    .catch(() => {});
+}
+</script>

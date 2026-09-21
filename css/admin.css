@@ -47,6 +47,7 @@ nav {
 
 nav a {
   color: #fff;
+  font-size: 13px;
   font-weight: 600;
   text-decoration: none;
 }
@@ -266,10 +267,21 @@ main {
 
 label {
   color: #34483b;
-  display: grid;
+  display: block;
   font-size: 13px;
   font-weight: 600;
-  gap: 5px;
+}
+
+label .asterisk {
+  color: red;
+  margin-left: 2px;
+}
+
+label input,
+label select,
+label textarea {
+  margin-top: 5px;
+  width: 100%;
 }
 
 input,
@@ -803,12 +815,12 @@ pre {
 
 .role-admin {
   background: #0f2535;
-  color: #fff;
+  color: #fff !important;
 }
 
 .role-super_admin {
   background: #0f2535;
-  color: #fff;
+  color: #fff !important;
 }
 
 .role-user {
@@ -818,7 +830,8 @@ pre {
 
 .approval-approved,
 .status-approved,
-.status-online {
+.status-online,
+.status-active {
   background: #dff3e6;
   color: #185D2A;
 }
@@ -844,30 +857,13 @@ pre {
   position: relative;
 }
 
-.actions-menu summary {
-  align-items: center;
-  background: #f4f8f5;
-  border-radius: 999px;
-  color: #34483b;
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 22px;
-  height: 32px;
-  justify-content: center;
-  line-height: 1;
-  list-style: none;
-  width: 32px;
-}
-
-.actions-menu summary::-webkit-details-marker {
-  display: none;
-}
-
 .actions-trigger {
   align-items: center;
   background: #f4f8f5;
+  border: none;
   border-radius: 999px;
   color: #34483b;
+  cursor: pointer;
   display: inline-flex;
   font-size: 22px;
   height: 32px;
@@ -889,43 +885,92 @@ pre {
   border: 1px solid #dce7df;
   border-radius: 12px;
   box-shadow: 0 16px 35px rgba(24, 93, 42, 0.16);
-  display: grid;
-  gap: 10px;
-  min-width: 520px;
-  padding: 14px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+  padding: 8px;
   position: absolute;
   right: 0;
   top: 38px;
   z-index: 10;
 }
 
-.menu-form,
-.menu-privileges {
-  align-items: center;
+.actions-menu-content.show {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
-.menu-grid-form {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.menu-grid-form button {
-  grid-column: 1 / -1;
-}
-
-.menu-privileges label {
+.action-item {
   align-items: center;
-  display: inline-flex;
-  gap: 5px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #34483b;
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-decoration: none;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.menu-privileges input[type="checkbox"] {
-  min-height: auto;
-  width: auto;
+.action-item:hover {
+  background: #e8f3ec;
+  color: #185D2A;
+}
+
+.action-item.danger {
+  color: #b42318;
+}
+
+.action-item.danger:hover {
+  background: #fdecea;
+  color: #b42318;
+}
+
+.action-item.unblock-text {
+  color: #185D2A;
+}
+
+.action-item.unblock-text:hover {
+  background: #e8f6ee;
+  color: #0f5132;
+}
+
+.modal-view-content {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.view-row {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eef3ef;
+}
+
+.view-row:last-child {
+  border-bottom: none;
+}
+
+.view-row strong {
+  color: #34483b;
+  font-size: 13px;
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+.view-row span {
+  color: #1e2a23;
+  font-size: 13px;
+  word-break: break-word;
 }
 
 .user-management-pagination {
@@ -956,9 +1001,9 @@ pre {
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 24px 60px rgba(15, 37, 53, 0.28);
-  max-height: calc(100vh - 48px);
+  max-height: 95vh;
   max-width: 820px;
-  overflow: auto;
+  overflow: visible;
   padding: 22px;
   position: relative;
   width: 100%;
@@ -1063,6 +1108,19 @@ pre {
   min-height: 38px;
   padding: 8px 14px;
   text-decoration: none;
+}
+
+.account-modal-card .modal-grid-form button,
+.account-modal-card .modal-inline-form button,
+.account-modal-card .modal-danger-form button {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.account-modal-card .modal-actions {
+  gap: 6px;
 }
 
 @media (max-width: 820px) {

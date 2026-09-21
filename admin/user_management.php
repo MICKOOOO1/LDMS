@@ -40,7 +40,7 @@ function account_status_label(string $status): string {
 }
 
 function account_online_status(array $account): string {
-    return !empty($account['online_last_seen']) ? 'online' : 'inactive';
+    return !empty($account['online_last_seen']) ? 'active' : 'inactive';
 }
 
 render_admin_header('User Management', 'user_management');

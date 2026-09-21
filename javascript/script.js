@@ -778,7 +778,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // 1) Generic required fields empty check (excluding optional: middle_name, extension_name, and handling sex separately)
             const requiredNames = [
-                'id_number','first_name','last_name','dob','age','username','email','password','re_password',
+                'first_name','last_name','dob','age','username','email','password','re_password',
                 'purok_street','barangay','city_municipality','province','country','zip_code'
             ];
 
@@ -859,7 +859,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== ID Number validation (format xxxx-xxxx) + AJAX with instant feedback (register only) =====
     const idInputField = document.querySelector('input[name="id_number"]');
-    if (idInputField) {
+    if (idInputField && !idInputField.readOnly) {
         const isForgotStep1 = !!document.querySelector('button[name="forgot_step1_btn"]');
         const validateIdFormat = (value) => /^\d{4}-\d{4}$/.test(value);
         let ajaxTimeout;

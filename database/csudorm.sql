@@ -88,7 +88,7 @@ INSERT INTO users (
     email, username, password_hash, role, account_status, privileges,
     purok_street, barangay, city_municipality, province, country, zip_code
 ) VALUES (
-    '0000-0001', 'Super Admin', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+    '2026-0001', 'Super Admin', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
     'superadmin@csucc-ldms.local', 'super.admin',
     '$2y$10$gkCEHa80hHpCZONoNg31Iu.gq8ppTlxNpaIYOmzKWJKAXO63LqUhq',
     'super_admin', 'approved', 'manage_accounts,manage_privileges,delete_accounts',
@@ -100,7 +100,7 @@ INSERT INTO users (
     email, username, password_hash, role, account_status, privileges,
     purok_street, barangay, city_municipality, province, country, zip_code
 ) VALUES (
-    '0000-0002', 'Administrator', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+    '2026-0002', 'Administrator', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
     'admin@csucc-ldms.local', 'system.admin',
     '$2y$10$lMhb/4L9PR9VaZeaw7TlAukkSTvfXJe46jG6T1CI/CVJ7QVQXE7SO',
     'admin', 'approved', 'manage_registration,update_accounts',

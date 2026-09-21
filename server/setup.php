@@ -217,38 +217,76 @@ setup_ensure_column($conn, 'pending_registrations', 'security_question_3', "VARC
 setup_ensure_column($conn, 'pending_registrations', 'security_answer_hash_3', "VARCHAR(255) NULL");
 
 // 10) Seed default super admin account
+$year = date('Y');
+$superAdminId = $year . '-0001';
 $defaultPassword = password_hash('SuperAdmin123!', PASSWORD_DEFAULT);
 $sql = "INSERT INTO users (
     user_id, first_name, middle_name, last_name, extension_name, dob, age, sex,
     email, username, password_hash, role, account_status, privileges,
     purok_street, barangay, city_municipality, province, country, zip_code
 ) VALUES (
-    '0000-0001', 'Super', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+    ?, 'Super', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
     'superadmin@csucc-ldms.local', 'super.admin', ?, 'super_admin', 'approved',
     'manage_accounts,manage_privileges,delete_accounts',
     'Campus', 'CSUCC', 'Cabadbaran', 'Agusan Del Norte', 'Philippines', '8605'
 ) ON DUPLICATE KEY UPDATE role = 'super_admin', account_status = 'approved'";
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("s", $defaultPassword);
+$stmt->bind_param("ss", $superAdminId, $defaultPassword);
 $stmt->execute();
 $stmt->close();
 
 // 9) Seed default admin account
+$adminId = $year . '-0002';
 $defaultPassword = password_hash('Admin123!', PASSWORD_DEFAULT);
 $sql = "INSERT INTO users (
     user_id, first_name, middle_name, last_name, extension_name, dob, age, sex,
     email, username, password_hash, role, account_status, privileges,
     purok_street, barangay, city_municipality, province, country, zip_code
 ) VALUES (
-    '0000-0002', 'System', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+    ?, 'System', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
     'admin@csucc-ldms.local', 'system.admin', ?, 'admin', 'approved',
     'manage_registration,update_accounts',
     'Campus', 'CSUCC', 'Cabadbaran', 'Agusan Del Norte', 'Philippines', '8605'
 ) ON DUPLICATE KEY UPDATE role = 'admin', account_status = 'approved'";
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("s", $defaultPassword);
+$stmt->bind_param("ss", $adminId, $defaultPassword);
 $stmt->execute();
 $stmt->close();
+
+// Migration: Update existing user IDs to 2026- format with unique sequence
+function migrate_user_ids(mysqli $conn, string $table): void {
+    $result = $conn->query("SELECT id, user_id FROM $table WHERE user_id NOT LIKE '2026-%' AND user_id REGEXP '^[0-9]{4}-[0-9]{4}$'");
+    if (!$result) return;
+    
+    $usedIds = [];
+    $existingResult = $conn->query("SELECT user_id FROM $table WHERE user_id LIKE '2026-%'");
+    if ($existingResult) {
+        while ($row = $existingResult->fetch_assoc()) {
+            $usedIds[$row['user_id']] = true;
+        }
+        $existingResult->close();
+    }
+    
+    $nextNum = 1;
+    while ($row = $result->fetch_assoc()) {
+        // Find next available number
+        while (isset($usedIds['2026-' . str_pad($nextNum, 4, '0', STR_PAD_LEFT)])) {
+            $nextNum++;
+        }
+        $newId = '2026-' . str_pad($nextNum, 4, '0', STR_PAD_LEFT);
+        $usedIds[$newId] = true;
+        
+        $stmt = $conn->prepare("UPDATE $table SET user_id = ? WHERE id = ?");
+        $stmt->bind_param("si", $newId, $row['id']);
+        $stmt->execute();
+        $stmt->close();
+        $nextNum++;
+    }
+    $result->close();
+}
+
+migrate_user_ids($conn, 'users');
+migrate_user_ids($conn, 'pending_registrations');
 
 $conn->close();
 

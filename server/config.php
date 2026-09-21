@@ -10,11 +10,11 @@ $email_config = [
     'host' => 'smtp.gmail.com',
     'port' => 587,
     'username' => 'mickmickengalan123@gmail.com',
-    'password' => 'YOUR_GMAIL_APP_PASSWORD',
+    'password' => 'vurn dibn uwqp teyz',
     'from_email' => 'mickmickengalan123@gmail.com',
     'from_name' => 'CSUCC LDMS',
     'encryption' => 'tls',
-];
+]; 
 
 // 1) Connect to MySQL server (without specifying DB yet)
 $conn = new mysqli($host, $user, $password);
@@ -359,6 +359,10 @@ function verify_otp(mysqli $conn, int $user_id, string $otp, string $purpose): b
     return $valid;
 }
 
+$year = date('Y');
+$superAdminId = $year . '-0001';
+$adminId = $year . '-0002';
+
 $result = $conn->query("SELECT COUNT(*) AS total FROM users WHERE role = 'super_admin'");
 $superAdminCount = $result ? (int)$result->fetch_assoc()['total'] : 0;
 if ($superAdminCount === 0) {
@@ -368,12 +372,12 @@ if ($superAdminCount === 0) {
         email, username, password_hash, role, account_status, privileges,
         purok_street, barangay, city_municipality, province, country, zip_code
     ) VALUES (
-        '0000-0001', 'Super', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+        ?, 'Super', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
         'superadmin@csucc-ldms.local', 'super.admin', ?, 'super_admin', 'approved',
         'manage_accounts,manage_privileges,delete_accounts',
         'Campus', 'CSUCC', 'Cabadbaran', 'Agusan Del Norte', 'Philippines', '8605'
     ) ON DUPLICATE KEY UPDATE role = 'super_admin', account_status = 'approved'");
-    $stmt->bind_param("s", $defaultPassword);
+    $stmt->bind_param("ss", $superAdminId, $defaultPassword);
     $stmt->execute();
     $stmt->close();
 }
@@ -387,12 +391,12 @@ if ($adminCount === 0) {
         email, username, password_hash, role, account_status, privileges,
         purok_street, barangay, city_municipality, province, country, zip_code
     ) VALUES (
-        '0000-0002', 'System', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
+        ?, 'System', NULL, 'Admin', NULL, '1990-01-01', 36, 'female',
         'admin@csucc-ldms.local', 'system.admin', ?, 'admin', 'approved',
         'manage_registration,update_accounts',
         'Campus', 'CSUCC', 'Cabadbaran', 'Agusan Del Norte', 'Philippines', '8605'
     ) ON DUPLICATE KEY UPDATE role = 'admin', account_status = 'approved'");
-    $stmt->bind_param("s", $defaultPassword);
+    $stmt->bind_param("ss", $adminId, $defaultPassword);
     $stmt->execute();
     $stmt->close();
 }

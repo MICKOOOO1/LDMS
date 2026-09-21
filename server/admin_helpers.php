@@ -349,4 +349,40 @@ function fetch_delete_requests(mysqli $conn): array {
     $result = $conn->query($sql);
     return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
 }
+
+function generate_next_id(mysqli $conn, string $role): string {
+    $year = date('Y');
+    $prefix = $year . '-';
+    
+    // Check all users regardless of role
+    $stmt = $conn->prepare("SELECT user_id FROM users WHERE user_id LIKE ? ORDER BY user_id DESC LIMIT 1");
+    $likePattern = $prefix . '%';
+    $stmt->bind_param("s", $likePattern);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $stmt->close();
+    
+    // Also check pending_registrations
+    $pendingStmt = $conn->prepare("SELECT user_id FROM pending_registrations WHERE user_id LIKE ? ORDER BY user_id DESC LIMIT 1");
+    $pendingStmt->bind_param("s", $likePattern);
+    $pendingStmt->execute();
+    $pendingResult = $pendingStmt->get_result();
+    $pendingRow = $pendingResult->fetch_assoc();
+    $pendingStmt->close();
+    
+    $maxNum = 0;
+    
+    if ($row && preg_match('/^\d{4}-(\d{4})$/', $row['user_id'], $matches)) {
+        $maxNum = max($maxNum, (int)$matches[1]);
+    }
+    
+    if ($pendingRow && preg_match('/^\d{4}-(\d{4})$/', $pendingRow['user_id'], $matches)) {
+        $maxNum = max($maxNum, (int)$matches[1]);
+    }
+    
+    $nextNum = $maxNum + 1;
+    
+    return $prefix . str_pad($nextNum, 4, '0', STR_PAD_LEFT);
+}
 ?>

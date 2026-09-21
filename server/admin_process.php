@@ -139,8 +139,52 @@ if (isset($_POST['change_status_btn']) || isset($_POST['block_account_btn']) || 
             if ($status === 'approved') {
                 // Move to users table
                 $fullName = trim($pending['first_name'] . ' ' . $pending['last_name']);
+                
+                // Check if user_id already exists in users table, generate new one if needed
+                $userId = $pending['user_id'];
+                $checkStmt = $conn->prepare("SELECT id FROM users WHERE user_id = ?");
+                $checkStmt->bind_param("s", $userId);
+                $checkStmt->execute();
+                $checkStmt->store_result();
+                // Keep generating until we find a unique ID
+                while ($checkStmt->num_rows > 0) {
+                    $userId = generate_next_id($conn, 'user');
+                    $checkStmt->close();
+                    $checkStmt = $conn->prepare("SELECT id FROM users WHERE user_id = ?");
+                    $checkStmt->bind_param("s", $userId);
+                    $checkStmt->execute();
+                    $checkStmt->store_result();
+                }
+                $checkStmt->close();
+                
+                // Check if email already exists in users table
+                $email = $pending['email'];
+                $checkEmailStmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+                $checkEmailStmt->bind_param("s", $email);
+                $checkEmailStmt->execute();
+                $checkEmailStmt->store_result();
+                if ($checkEmailStmt->num_rows > 0) {
+                    $alerts[] = ['type' => 'error', 'message' => 'Email address is already registered. Cannot approve.'];
+                    $checkEmailStmt->close();
+                    finish_admin_action($alerts, $redirect);
+                }
+                $checkEmailStmt->close();
+                
+                // Check if username already exists in users table
+                $username = $pending['username'];
+                $checkUserStmt = $conn->prepare("SELECT id FROM users WHERE username = ?");
+                $checkUserStmt->bind_param("s", $username);
+                $checkUserStmt->execute();
+                $checkUserStmt->store_result();
+                if ($checkUserStmt->num_rows > 0) {
+                    $alerts[] = ['type' => 'error', 'message' => 'Username is already registered. Cannot approve.'];
+                    $checkUserStmt->close();
+                    finish_admin_action($alerts, $redirect);
+                }
+                $checkUserStmt->close();
+                
                 $stmt = $conn->prepare("INSERT INTO users (user_id, first_name, middle_name, last_name, extension_name, dob, age, sex, email, username, password_hash, role, account_status, setup_completed, purok_street, barangay, city_municipality, province, country, zip_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', 'approved', 0, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("ssssssissssssssss", $pending['user_id'], $pending['first_name'], $pending['middle_name'], $pending['last_name'], $pending['extension_name'], $pending['dob'], $pending['age'], $pending['sex'], $pending['email'], $pending['username'], $pending['password_hash'], $pending['purok_street'], $pending['barangay'], $pending['city_municipality'], $pending['province'], $pending['country'], $pending['zip_code']);
+                $stmt->bind_param("ssssssissssssssss", $userId, $pending['first_name'], $pending['middle_name'], $pending['last_name'], $pending['extension_name'], $pending['dob'], $pending['age'], $pending['sex'], $pending['email'], $pending['username'], $pending['password_hash'], $pending['purok_street'], $pending['barangay'], $pending['city_municipality'], $pending['province'], $pending['country'], $pending['zip_code']);
                 
                 if ($stmt->execute()) {
                     $newUserDbId = $conn->insert_id;
@@ -156,7 +200,7 @@ if (isset($_POST['change_status_btn']) || isset($_POST['block_account_btn']) || 
                     if (!empty($securityEntries)) {
                         $secStmt = $conn->prepare("INSERT INTO security_questions (user_id, question_code, answer_hash) VALUES (?,?,?)");
                         foreach ($securityEntries as $entry) {
-                            $secStmt->bind_param("sss", $pending['user_id'], $entry[0], $entry[1]);
+                            $secStmt->bind_param("sss", $userId, $entry[0], $entry[1]);
                             $secStmt->execute();
                         }
                         $secStmt->close();
@@ -168,21 +212,24 @@ if (isset($_POST['change_status_btn']) || isset($_POST['block_account_btn']) || 
                     $updateStmt->execute();
                     $updateStmt->close();
                     
-                    // Send activation OTP email
-                    create_otp($conn, $newUserDbId, $pending['email'], 'account_activation', $fullName);
+                    // Mark setup as completed so user can login immediately
+                    $completeStmt = $conn->prepare("UPDATE users SET setup_completed = 1 WHERE id = ?");
+                    $completeStmt->bind_param("i", $newUserDbId);
+                    $completeStmt->execute();
+                    $completeStmt->close();
                     
-                    $alerts[] = ['type' => 'success', 'message' => 'Registration approved. Activation code sent to user email.'];
+                    $alerts[] = ['type' => 'success', 'message' => 'Registration approved. Account is now active.'];
                 } else {
                     $alerts[] = ['type' => 'error', 'message' => 'Failed to approve registration: ' . $stmt->error];
+                    $stmt->close();
                 }
-                $stmt->close();
             } else {
-                // Reject/block
-                $updateStmt = $conn->prepare("UPDATE pending_registrations SET status = 'rejected', reviewed_by = ?, reviewed_at = NOW() WHERE id = ?");
-                $updateStmt->bind_param("ii", $_SESSION['user_id'], $targetId);
-                $updateStmt->execute();
-                $updateStmt->close();
-                $alerts[] = ['type' => 'success', 'message' => 'Registration rejected.'];
+                // Reject - delete from pending_registrations completely
+                $deleteStmt = $conn->prepare("DELETE FROM pending_registrations WHERE id = ?");
+                $deleteStmt->bind_param("i", $targetId);
+                $deleteStmt->execute();
+                $deleteStmt->close();
+                $alerts[] = ['type' => 'success', 'message' => 'Registration rejected and deleted.'];
             }
         }
     } else {
@@ -203,12 +250,17 @@ if (isset($_POST['change_status_btn']) || isset($_POST['block_account_btn']) || 
             } elseif ($role === 'admin' && $target['role'] === 'super_admin') {
                 $alerts[] = ['type' => 'error', 'message' => 'Administrators cannot change a super admin account.'];
             } else {
-                $stmt = $conn->prepare("UPDATE users SET account_status = ? WHERE id = ?");
-                $stmt->bind_param("si", $status, $targetId);
-                $alerts[] = $stmt->execute()
-                    ? ['type' => 'success', 'message' => $status === 'blocked' ? 'Account blocked.' : 'Account unblocked and approved.']
-                    : ['type' => 'error', 'message' => 'Unable to update account status.'];
-                $stmt->close();
+                $reason = trim($_POST['reason'] ?? '');
+                if ($reason === '') {
+                    $alerts[] = ['type' => 'error', 'message' => 'Please enter a reason.'];
+                } else {
+                    $stmt = $conn->prepare("UPDATE users SET account_status = ? WHERE id = ?");
+                    $stmt->bind_param("si", $status, $targetId);
+                    $alerts[] = $stmt->execute()
+                        ? ['type' => 'success', 'message' => $status === 'blocked' ? 'Account blocked.' : 'Account unblocked and approved.']
+                        : ['type' => 'error', 'message' => 'Unable to update account status.'];
+                    $stmt->close();
+                }
             }
         }
     }
@@ -277,9 +329,19 @@ if (isset($_POST['delete_account_btn'])) {
     }
 
     $targetId = (int)($_POST['target_id'] ?? 0);
-    if ($targetId === (int)$_SESSION['user_id']) {
+    $reason = trim($_POST['reason'] ?? '');
+    
+    if ($reason === '') {
+        $alerts[] = ['type' => 'error', 'message' => 'Please enter a reason for deletion.'];
+    } elseif ($targetId === (int)$_SESSION['user_id']) {
         $alerts[] = ['type' => 'error', 'message' => 'You cannot delete your own account.'];
     } else {
+        // Delete related records first
+        $conn->prepare("DELETE FROM security_questions WHERE user_id = (SELECT user_id FROM users WHERE id = ?)")->bind_param("i", $targetId)->execute();
+        $conn->prepare("DELETE FROM login_logs WHERE user_id = ?")->bind_param("i", $targetId)->execute();
+        $conn->prepare("DELETE FROM active_sessions WHERE user_id = ?")->bind_param("i", $targetId)->execute();
+        $conn->prepare("DELETE FROM otp_codes WHERE user_id = ?")->bind_param("i", $targetId)->execute();
+        
         $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
         $stmt->bind_param("i", $targetId);
         $alerts[] = $stmt->execute()
@@ -374,24 +436,65 @@ if (isset($_POST['create_staff_btn'])) {
     }
 
     $newRole = $_POST['role'] ?? 'admin';
-    $userId = trim($_POST['id_number'] ?? '');
-    $firstName = trim($_POST['first_name'] ?? '');
-    $lastName = trim($_POST['last_name'] ?? '');
-    $sex = $_POST['sex'] ?? '';
+    $userId = generate_next_id($conn, $newRole);
+    
+    // Ensure unique ID by checking and regenerating if needed
+    $checkStmt = $conn->prepare("SELECT id FROM users WHERE user_id = ?");
+    $checkStmt->bind_param("s", $userId);
+    $checkStmt->execute();
+    $checkStmt->store_result();
+    while ($checkStmt->num_rows > 0) {
+        $userId = generate_next_id($conn, $newRole);
+        $checkStmt->close();
+        $checkStmt = $conn->prepare("SELECT id FROM users WHERE user_id = ?");
+        $checkStmt->bind_param("s", $userId);
+        $checkStmt->execute();
+        $checkStmt->store_result();
+    }
+    $checkStmt->close();
+    
+    // Also check pending_registrations
+    $pendingCheckStmt = $conn->prepare("SELECT id FROM pending_registrations WHERE user_id = ?");
+    $pendingCheckStmt->bind_param("s", $userId);
+    $pendingCheckStmt->execute();
+    $pendingCheckStmt->store_result();
+    while ($pendingCheckStmt->num_rows > 0) {
+        $userId = generate_next_id($conn, $newRole);
+        $pendingCheckStmt->close();
+        $pendingCheckStmt = $conn->prepare("SELECT id FROM pending_registrations WHERE user_id = ?");
+        $pendingCheckStmt->bind_param("s", $userId);
+        $pendingCheckStmt->execute();
+        $pendingCheckStmt->store_result();
+    }
+    $pendingCheckStmt->close();
+    
     $email = trim($_POST['email'] ?? '');
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if (!in_array($newRole, ['admin', 'super_admin'], true) || $userId === '' || $firstName === '' || $lastName === '' || $sex === '' || $email === '' || $username === '' || $password === '') {
+    // Use username as first_name, set defaults for required fields
+    $firstName = $username;
+    $lastName = '';
+    $sex = 'female';
+    $dob = '1990-01-01';
+    $age = 18;
+
+    if (!in_array($newRole, ['admin', 'super_admin'], true) || $email === '' || $username === '' || $password === '') {
         $alerts[] = ['type' => 'error', 'message' => 'Please complete all required admin account fields.'];
-    } elseif (!preg_match('/^\d{4}-\d{4}$/', $userId)) {
-        $alerts[] = ['type' => 'error', 'message' => 'Employee ID must use xxxx-xxxx format.'];
     } else {
         $duplicateStmt = $conn->prepare("SELECT user_id, email, username FROM users WHERE user_id = ? OR email = ? OR username = ? LIMIT 1");
         $duplicateStmt->bind_param("sss", $userId, $email, $username);
         $duplicateStmt->execute();
         $duplicate = $duplicateStmt->get_result()->fetch_assoc();
         $duplicateStmt->close();
+
+        if (!$duplicate) {
+            $pendingStmt = $conn->prepare("SELECT user_id, email, username FROM pending_registrations WHERE user_id = ? OR email = ? OR username = ? LIMIT 1");
+            $pendingStmt->bind_param("sss", $userId, $email, $username);
+            $pendingStmt->execute();
+            $duplicate = $pendingStmt->get_result()->fetch_assoc();
+            $pendingStmt->close();
+        }
 
         if ($duplicate) {
             if ($duplicate['email'] === $email) {
@@ -439,6 +542,89 @@ if (isset($_POST['create_staff_btn'])) {
             } else {
                 $alerts[] = ['type' => 'error', 'message' => 'Unable to create admin account: ' . $error];
             }
+            $stmt->close();
+        }
+    }
+
+    finish_admin_action($alerts, $redirect);
+}
+
+if (isset($_POST['change_role_btn'])) {
+    if ($role !== 'super_admin') {
+        $alerts[] = ['type' => 'error', 'message' => 'Only the super admin can change roles.'];
+        finish_admin_action($alerts, $redirect);
+    }
+
+    $targetId = (int)($_POST['target_id'] ?? 0);
+    $newRole = $_POST['role'] ?? '';
+
+    if ($targetId <= 0 || !in_array($newRole, ['user', 'admin', 'super_admin'], true)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Invalid role or target account.'];
+    } elseif ($targetId === (int)$_SESSION['user_id']) {
+        $alerts[] = ['type' => 'error', 'message' => 'You cannot change your own role.'];
+    } else {
+        $targetStmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
+        $targetStmt->bind_param("i", $targetId);
+        $targetStmt->execute();
+        $target = $targetStmt->get_result()->fetch_assoc();
+        $targetStmt->close();
+
+        if (!$target) {
+            $alerts[] = ['type' => 'error', 'message' => 'Account not found.'];
+        } else {
+            $defaultPrivileges = '';
+            if ($newRole === 'admin') {
+                $defaultPrivileges = 'manage_registration,update_accounts';
+            } elseif ($newRole === 'super_admin') {
+                $defaultPrivileges = 'manage_accounts,manage_privileges,delete_accounts';
+            }
+
+            $stmt = $conn->prepare("UPDATE users SET role = ?, privileges = ? WHERE id = ?");
+            $stmt->bind_param("ssi", $newRole, $defaultPrivileges, $targetId);
+            $alerts[] = $stmt->execute()
+                ? ['type' => 'success', 'message' => 'Role updated successfully.']
+                : ['type' => 'error', 'message' => 'Unable to update role.'];
+            $stmt->close();
+        }
+    }
+
+    finish_admin_action($alerts, $redirect);
+}
+
+if (isset($_POST['reset_password_btn'])) {
+    if ($role !== 'super_admin') {
+        $alerts[] = ['type' => 'error', 'message' => 'Only the super admin can reset passwords.'];
+        finish_admin_action($alerts, $redirect);
+    }
+
+    $targetId = (int)($_POST['target_id'] ?? 0);
+    $newPassword = $_POST['new_password'] ?? '';
+    $confirmPassword = $_POST['confirm_password'] ?? '';
+
+    if ($targetId <= 0 || $newPassword === '' || $confirmPassword === '') {
+        $alerts[] = ['type' => 'error', 'message' => 'Please fill in all password fields.'];
+    } elseif ($newPassword !== $confirmPassword) {
+        $alerts[] = ['type' => 'error', 'message' => 'Passwords do not match.'];
+    } elseif (strlen($newPassword) < 8) {
+        $alerts[] = ['type' => 'error', 'message' => 'Password must be at least 8 characters long.'];
+    } elseif ($targetId === (int)$_SESSION['user_id']) {
+        $alerts[] = ['type' => 'error', 'message' => 'You cannot reset your own password from here.'];
+    } else {
+        $targetStmt = $conn->prepare("SELECT id FROM users WHERE id = ?");
+        $targetStmt->bind_param("i", $targetId);
+        $targetStmt->execute();
+        $target = $targetStmt->get_result()->fetch_assoc();
+        $targetStmt->close();
+
+        if (!$target) {
+            $alerts[] = ['type' => 'error', 'message' => 'Account not found.'];
+        } else {
+            $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+            $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+            $stmt->bind_param("si", $hash, $targetId);
+            $alerts[] = $stmt->execute()
+                ? ['type' => 'success', 'message' => 'Password reset successfully.']
+                : ['type' => 'error', 'message' => 'Unable to reset password.'];
             $stmt->close();
         }
     }

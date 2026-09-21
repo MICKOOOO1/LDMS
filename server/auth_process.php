@@ -1,6 +1,7 @@
 <?php
 session_start();
 require 'config.php';
+require 'admin_helpers.php';
 
 $alerts = [];
 
@@ -403,7 +404,7 @@ function is_valid_roman_numeral($str) {
 if (isset($_POST['register_btn'])) {
 
     // Retrieve and sanitize input
-    $user_id         = trim($_POST['id_number']);
+    $user_id         = generate_next_id($conn, 'user');
     $first_name      = trim($_POST['first_name']);
     $middle_name     = trim($_POST['middle_name'] ?? '');
     $last_name       = trim($_POST['last_name']);
@@ -427,7 +428,7 @@ if (isset($_POST['register_btn'])) {
     $zip_code         = trim($_POST['zip_code']);
 
     // ================= BASIC VALIDATION =================
-    if (empty($user_id) || empty($first_name) || empty($last_name) || empty($dob) || empty($sex) || empty($username) || empty($email) || empty($password) || empty($re_password) || empty($purok_street) || empty($barangay) || empty($city_municipality) || empty($province) || empty($country) || empty($zip_code)) {
+    if (empty($first_name) || empty($last_name) || empty($dob) || empty($sex) || empty($username) || empty($email) || empty($password) || empty($re_password) || empty($purok_street) || empty($barangay) || empty($city_municipality) || empty($province) || empty($country) || empty($zip_code)) {
         $alerts[] = ['type' => 'error', 'message' => 'All required fields must be filled out.'];
     }
 
@@ -609,23 +610,46 @@ if (isset($_POST['register_btn'])) {
         $alerts[] = ['type' => 'error', 'message' => 'Email Address must be between 5 and 70 characters.'];
     }
 
-    // Check username, email, and user_id uniqueness (both approved users and pending registrations)
-    $stmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ? OR user_id = ?");
-    $stmt->bind_param("sss", $username, $email, $user_id);
+    // Check username, email uniqueness (both approved users and pending registrations)
+    $stmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
+    $stmt->bind_param("ss", $username, $email);
     $stmt->execute();
     $stmt->store_result();
     if ($stmt->num_rows > 0) {
-        $alerts[] = ['type' => 'error', 'message' => 'Username, Email, or ID Number already exists.'];
+        $alerts[] = ['type' => 'error', 'message' => 'Username or Email already exists.'];
     }
     $stmt->close();
 
+    // Check user_id uniqueness (both approved users and pending registrations)
     if (empty($alerts)) {
-        $pendingStmt = $conn->prepare("SELECT id FROM pending_registrations WHERE (username = ? OR email = ? OR user_id = ?) AND status = 'pending'");
-        $pendingStmt->bind_param("sss", $username, $email, $user_id);
+        $idStmt = $conn->prepare("SELECT id FROM users WHERE user_id = ?");
+        $idStmt->bind_param("s", $user_id);
+        $idStmt->execute();
+        $idStmt->store_result();
+        if ($idStmt->num_rows > 0) {
+            $alerts[] = ['type' => 'error', 'message' => 'ID Number already exists. Please try again.'];
+        }
+        $idStmt->close();
+    }
+
+    if (empty($alerts)) {
+        $pendingIdStmt = $conn->prepare("SELECT id FROM pending_registrations WHERE user_id = ? AND status = 'pending'");
+        $pendingIdStmt->bind_param("s", $user_id);
+        $pendingIdStmt->execute();
+        $pendingIdStmt->store_result();
+        if ($pendingIdStmt->num_rows > 0) {
+            $alerts[] = ['type' => 'error', 'message' => 'ID Number already has a pending registration. Please try again.'];
+        }
+        $pendingIdStmt->close();
+    }
+
+    if (empty($alerts)) {
+        $pendingStmt = $conn->prepare("SELECT id FROM pending_registrations WHERE (username = ? OR email = ?) AND status = 'pending'");
+        $pendingStmt->bind_param("ss", $username, $email);
         $pendingStmt->execute();
         $pendingStmt->store_result();
         if ($pendingStmt->num_rows > 0) {
-            $alerts[] = ['type' => 'error', 'message' => 'Username, Email, or ID Number already has a pending registration.'];
+            $alerts[] = ['type' => 'error', 'message' => 'Username or Email already has a pending registration.'];
         }
         $pendingStmt->close();
     }

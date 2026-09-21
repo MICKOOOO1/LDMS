@@ -8,6 +8,10 @@ require '_header.php';
 $alerts = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
 
+// For Create Account modal - auto-generate ID
+$createRoleDefault = 'admin';
+$createAccountId = generate_next_id($conn, $createRoleDefault);
+
 $employeeId = trim($_GET['employee_id'] ?? '');
 $search = trim($_GET['search'] ?? '');
 $roleFilter = trim($_GET['role'] ?? '');
@@ -38,7 +42,7 @@ function super_admin_status_label(string $status): string {
 }
 
 function super_admin_online_status(array $account): string {
-    return !empty($account['online_last_seen']) ? 'online' : 'inactive';
+    return !empty($account['online_last_seen']) ? 'active' : 'inactive';
 }
 
 function super_admin_role_label(string $role): string {
@@ -134,7 +138,21 @@ render_super_admin_header('User Management', 'accounts');
                         <?php $onlineStatus = super_admin_online_status($account); ?>
                         <td><span class="status-pill status-<?= htmlspecialchars($onlineStatus); ?>"><?= htmlspecialchars(ucfirst($onlineStatus)); ?></span></td>
                         <td>
-                            <a href="#manage-account-<?= (int)$account['id']; ?>" class="actions-trigger" aria-label="Manage account">⋮</a>
+                            <div class="actions-menu">
+                                <button type="button" class="actions-trigger" aria-label="Manage account" aria-expanded="false">⋮</button>
+                                <div class="actions-menu-content">
+                                    <a href="#view-account-<?= (int)$account['id']; ?>" class="action-item">View</a>
+                                    <a href="#edit-account-<?= (int)$account['id']; ?>" class="action-item">Edit</a>
+                                    <a href="#role-privilege-<?= (int)$account['id']; ?>" class="action-item">Role and Privilege</a>
+                                    <?php if ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
+                                        <a href="#block-account-<?= (int)$account['id']; ?>" class="action-item <?= $status === 'blocked' ? 'unblock-text' : ''; ?>">
+                                            <?= $status === 'blocked' ? 'Unblock' : 'Block' ?>
+                                        </a>
+                                        <a href="#reset-password-<?= (int)$account['id']; ?>" class="action-item">Reset Password</a>
+                                        <a href="#delete-account-<?= (int)$account['id']; ?>" class="action-item danger">Delete</a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -154,33 +172,50 @@ render_super_admin_header('User Management', 'accounts');
 
 <?php foreach ($accounts as $account): ?>
     <?php $status = $account['account_status'] ?? 'pending'; ?>
-    <div id="manage-account-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
+    
+    <!-- View Account Modal -->
+    <div id="view-account-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
         <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
-        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="manage-account-title-<?= (int)$account['id']; ?>">
+        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="view-account-title-<?= (int)$account['id']; ?>">
             <div class="account-modal-header">
                 <div>
-                    <h2 id="manage-account-title-<?= (int)$account['id']; ?>">Manage Account</h2>
+                    <h2 id="view-account-title-<?= (int)$account['id']; ?>">View Account</h2>
                     <p><?= htmlspecialchars(full_name($account)); ?> · <?= htmlspecialchars($account['user_id']); ?></p>
                 </div>
                 <a href="#" class="account-modal-close" aria-label="Close modal">&times;</a>
             </div>
+            <div class="modal-view-content">
+                <div class="view-row"><strong>ID Number:</strong> <span><?= htmlspecialchars($account['user_id']); ?></span></div>
+                <div class="view-row"><strong>Full Name:</strong> <span><?= htmlspecialchars(full_name($account)); ?></span></div>
+                <div class="view-row"><strong>First Name:</strong> <span><?= htmlspecialchars($account['first_name']); ?></span></div>
+                <div class="view-row"><strong>Middle Name:</strong> <span><?= htmlspecialchars($account['middle_name'] ?? 'N/A'); ?></span></div>
+                <div class="view-row"><strong>Last Name:</strong> <span><?= htmlspecialchars($account['last_name']); ?></span></div>
+                <div class="view-row"><strong>Extension:</strong> <span><?= htmlspecialchars($account['extension_name'] ?? 'N/A'); ?></span></div>
+                <div class="view-row"><strong>Email:</strong> <span><?= htmlspecialchars($account['email']); ?></span></div>
+                <div class="view-row"><strong>Username:</strong> <span><?= htmlspecialchars($account['username']); ?></span></div>
+                <div class="view-row"><strong>Role:</strong> <span><span class="role-pill role-<?= htmlspecialchars($account['role']); ?>"><?= htmlspecialchars(super_admin_role_label($account['role'])); ?></span></span></div>
+                <div class="view-row"><strong>Status:</strong> <span><span class="approval-pill approval-<?= htmlspecialchars($status); ?>"><?= htmlspecialchars(ucfirst($status)); ?></span></span></div>
+                <div class="view-row"><strong>Active:</strong> <span><span class="status-pill status-<?= htmlspecialchars(super_admin_online_status($account)); ?>"><?= htmlspecialchars(ucfirst(super_admin_online_status($account))); ?></span></span></div>
+                <div class="view-row"><strong>Date of Birth:</strong> <span><?= htmlspecialchars($account['dob']); ?></span></div>
+                <div class="view-row"><strong>Age:</strong> <span><?= htmlspecialchars($account['age']); ?></span></div>
+                <div class="view-row"><strong>Sex:</strong> <span><?= htmlspecialchars($account['sex']); ?></span></div>
+                <div class="view-row"><strong>Address:</strong> <span><?= htmlspecialchars($account['purok_street'] . ', ' . $account['barangay'] . ', ' . $account['city_municipality'] . ', ' . $account['province'] . ', ' . $account['country'] . ' ' . $account['zip_code']); ?></span></div>
+                <div class="view-row"><strong>Date Registered:</strong> <span><?= htmlspecialchars($account['date_registered'] ?? 'N/A'); ?></span></div>
+            </div>
+        </section>
+    </div>
 
-            <form action="../server/admin_process.php" method="POST" class="modal-inline-form">
-                <input type="hidden" name="return_page" value="accounts.php">
-                <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
-                <select name="account_status">
-                    <option value="pending" <?= $status === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                    <option value="approved" <?= $status === 'approved' ? 'selected' : ''; ?>>Approved</option>
-                    <option value="blocked" <?= $status === 'blocked' ? 'selected' : ''; ?>>Blocked</option>
-                </select>
-                <button type="submit" name="change_status_btn">Save Status</button>
-                <?php if ($status === 'blocked'): ?>
-                    <button type="submit" name="unblock_account_btn">Unblock</button>
-                <?php elseif ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
-                    <button type="submit" name="block_account_btn" class="danger">Block</button>
-                <?php endif; ?>
-            </form>
-
+    <!-- Edit Account Modal -->
+    <div id="edit-account-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
+        <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
+        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="edit-account-title-<?= (int)$account['id']; ?>">
+            <div class="account-modal-header">
+                <div>
+                    <h2 id="edit-account-title-<?= (int)$account['id']; ?>">Edit Account</h2>
+                    <p><?= htmlspecialchars(full_name($account)); ?> · <?= htmlspecialchars($account['user_id']); ?></p>
+                </div>
+                <a href="#" class="account-modal-close" aria-label="Close modal">&times;</a>
+            </div>
             <form action="../server/admin_process.php" method="POST" class="modal-grid-form">
                 <input type="hidden" name="return_page" value="accounts.php">
                 <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
@@ -201,26 +236,117 @@ render_super_admin_header('User Management', 'accounts');
                     <button type="submit" name="update_account_btn">Update Info</button>
                 </div>
             </form>
+        </section>
+    </div>
 
-            <?php if ($account['role'] === 'admin'): ?>
+    <!-- Role and Privilege Modal -->
+    <div id="role-privilege-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
+        <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
+        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="role-privilege-title-<?= (int)$account['id']; ?>">
+            <div class="account-modal-header">
+                <div>
+                    <h2 id="role-privilege-title-<?= (int)$account['id']; ?>">Role and Privilege</h2>
+                    <p><?= htmlspecialchars(full_name($account)); ?> · <?= htmlspecialchars($account['user_id']); ?></p>
+                </div>
+                <a href="#" class="account-modal-close" aria-label="Close modal">&times;</a>
+            </div>
+            <form action="../server/admin_process.php" method="POST" class="modal-inline-form">
+                <input type="hidden" name="return_page" value="accounts.php">
+                <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
+                <label>Role
+                    <select name="role" required>
+                        <option value="user" <?= $account['role'] === 'user' ? 'selected' : ''; ?>>User</option>
+                        <option value="admin" <?= $account['role'] === 'admin' ? 'selected' : ''; ?>>Administrator</option>
+                        <option value="super_admin" <?= $account['role'] === 'super_admin' ? 'selected' : ''; ?>>Super Administrator</option>
+                    </select>
+                </label>
+                <button type="submit" name="change_role_btn">Save Role</button>
+            </form>
+            <?php if ($account['role'] === 'admin' || $account['role'] === 'super_admin'): ?>
                 <?php $privileges = array_filter(array_map('trim', explode(',', $account['privileges'] ?? ''))); ?>
                 <form action="../server/admin_process.php" method="POST" class="modal-privileges">
                     <input type="hidden" name="return_page" value="accounts.php">
                     <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
-                    <label><input type="checkbox" name="privileges[]" value="manage_registration" <?= in_array('manage_registration', $privileges, true) ? 'checked' : ''; ?>> Registration</label>
-                    <label><input type="checkbox" name="privileges[]" value="update_accounts" <?= in_array('update_accounts', $privileges, true) ? 'checked' : ''; ?>> Update</label>
-                    <label><input type="checkbox" name="privileges[]" value="request_delete" <?= in_array('request_delete', $privileges, true) ? 'checked' : ''; ?>> Delete Requests</label>
+                    <?php if ($account['role'] === 'admin'): ?>
+                        <label><input type="checkbox" name="privileges[]" value="manage_registration" <?= in_array('manage_registration', $privileges, true) ? 'checked' : ''; ?>> Manage Registration</label>
+                        <label><input type="checkbox" name="privileges[]" value="update_accounts" <?= in_array('update_accounts', $privileges, true) ? 'checked' : ''; ?>> Update Accounts</label>
+                        <label><input type="checkbox" name="privileges[]" value="request_delete" <?= in_array('request_delete', $privileges, true) ? 'checked' : ''; ?>> Request Delete</label>
+                    <?php elseif ($account['role'] === 'super_admin'): ?>
+                        <label><input type="checkbox" name="privileges[]" value="manage_accounts" <?= in_array('manage_accounts', $privileges, true) ? 'checked' : ''; ?>> Manage Accounts</label>
+                        <label><input type="checkbox" name="privileges[]" value="manage_privileges" <?= in_array('manage_privileges', $privileges, true) ? 'checked' : ''; ?>> Manage Privileges</label>
+                        <label><input type="checkbox" name="privileges[]" value="delete_accounts" <?= in_array('delete_accounts', $privileges, true) ? 'checked' : ''; ?>> Delete Accounts</label>
+                    <?php endif; ?>
                     <button type="submit" name="save_privileges_btn">Save Privileges</button>
                 </form>
             <?php endif; ?>
+        </section>
+    </div>
 
-            <?php if ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
-                <form action="../server/admin_process.php" method="POST" class="modal-danger-form" onsubmit="return confirm('Delete this account permanently?');">
-                    <input type="hidden" name="return_page" value="accounts.php">
-                    <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
-                    <button type="submit" name="delete_account_btn" class="danger">Delete Account</button>
-                </form>
-            <?php endif; ?>
+    <!-- Block/Unblock Modal -->
+    <div id="block-account-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
+        <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
+        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="block-account-title-<?= (int)$account['id']; ?>">
+            <div class="account-modal-header">
+                <div>
+                    <h2 id="block-account-title-<?= (int)$account['id']; ?>"><?= $status === 'blocked' ? 'Unblock Account' : 'Block Account' ?></h2>
+                    <p><?= htmlspecialchars(full_name($account)); ?> · <?= htmlspecialchars($account['user_id']); ?></p>
+                </div>
+                <a href="#" class="account-modal-close" aria-label="Close modal">&times;</a>
+            </div>
+            <form action="../server/admin_process.php" method="POST" class="modal-grid-form">
+                <input type="hidden" name="return_page" value="accounts.php">
+                <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
+                <label>Reason<textarea name="reason" rows="3" placeholder="Enter reason..." required></textarea></label>
+                <?php if ($status === 'blocked'): ?>
+                    <button type="submit" name="unblock_account_btn">Unblock Account</button>
+                <?php else: ?>
+                    <button type="submit" name="block_account_btn" class="danger">Block Account</button>
+                <?php endif; ?>
+            </form>
+        </section>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div id="reset-password-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
+        <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
+        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="reset-password-title-<?= (int)$account['id']; ?>">
+            <div class="account-modal-header">
+                <div>
+                    <h2 id="reset-password-title-<?= (int)$account['id']; ?>">Reset Password</h2>
+                    <p><?= htmlspecialchars(full_name($account)); ?> · <?= htmlspecialchars($account['user_id']); ?></p>
+                </div>
+                <a href="#" class="account-modal-close" aria-label="Close modal">&times;</a>
+            </div>
+            <form action="../server/admin_process.php" method="POST" class="modal-grid-form">
+                <input type="hidden" name="return_page" value="accounts.php">
+                <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
+                <label>New Password<input type="password" name="new_password" required></label>
+                <label>Confirm Password<input type="password" name="confirm_password" required></label>
+                <div class="modal-actions">
+                    <a href="#" class="modal-cancel">Cancel</a>
+                    <button type="submit" name="reset_password_btn" class="danger">Reset Password</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <!-- Delete Account Modal -->
+    <div id="delete-account-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
+        <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
+        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="delete-account-title-<?= (int)$account['id']; ?>">
+            <div class="account-modal-header">
+                <div>
+                    <h2 id="delete-account-title-<?= (int)$account['id']; ?>">Delete Account</h2>
+                    <p><?= htmlspecialchars(full_name($account)); ?> · <?= htmlspecialchars($account['user_id']); ?></p>
+                </div>
+                <a href="#" class="account-modal-close" aria-label="Close modal">&times;</a>
+            </div>
+            <form action="../server/admin_process.php" method="POST" class="modal-grid-form" onsubmit="return confirm('Delete this account permanently? This action cannot be undone.');">
+                <input type="hidden" name="return_page" value="accounts.php">
+                <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
+                <label>Reason<textarea name="reason" rows="3" placeholder="Enter reason for deletion..." required></textarea></label>
+                <button type="submit" name="delete_account_btn" class="danger">Delete Account</button>
+            </form>
         </section>
     </div>
 <?php endforeach; ?>
@@ -238,41 +364,28 @@ render_super_admin_header('User Management', 'accounts');
 
         <form action="../server/admin_process.php" method="POST" class="modal-grid-form">
             <input type="hidden" name="return_page" value="accounts.php">
-            <label>Role
-                <select name="role" required>
-                    <option value="admin">Administrator</option>
-                    <option value="super_admin">Super Administrator</option>
+            <label>Role <span class="asterisk">*</span>
+                <select name="role" id="createRoleSelect" required onchange="updateCreateAccountId(this.value)">
+                    <option value="admin"<?= $createRoleDefault === 'admin' ? ' selected' : ''; ?>>Administrator</option>
+                    <option value="super_admin"<?= $createRoleDefault === 'super_admin' ? ' selected' : ''; ?>>Super Administrator</option>
                 </select>
+                <small class="input-message"></small>
             </label>
             <label>Employee ID
-                <input type="text" name="id_number" placeholder="xxxx-xxxx" required>
+                <input type="text" name="id_number" id="createAccountId" value="<?= htmlspecialchars($createAccountId); ?>" readonly style="background-color: #e8e8e8; color: #666;">
+                <small class="input-message"></small>
             </label>
-            <label>First Name
-                <input type="text" name="first_name" required>
-            </label>
-            <label>Last Name
-                <input type="text" name="last_name" required>
-            </label>
-            <label>Date of Birth
-                <input type="date" name="dob" value="1990-01-01">
-            </label>
-            <label>Age
-                <input type="number" name="age" value="18" min="18">
-            </label>
-            <label>Sex
-                <select name="sex" required>
-                    <option value="female">Female</option>
-                    <option value="male">Male</option>
-                </select>
-            </label>
-            <label>Email
+            <label>Email <span class="asterisk">*</span>
                 <input type="email" name="email" required>
+                <small class="input-message"></small>
             </label>
-            <label>Username
+            <label>Username <span class="asterisk">*</span>
                 <input type="text" name="username" required>
+                <small class="input-message"></small>
             </label>
-            <label>Password
+            <label>Password <span class="asterisk">*</span>
                 <input type="password" name="password" required>
+                <small class="input-message"></small>
             </label>
             <div class="modal-actions">
                 <a href="#" class="modal-cancel">Cancel</a>
@@ -282,3 +395,210 @@ render_super_admin_header('User Management', 'accounts');
     </section>
 </div>
 <?php render_super_admin_footer(); ?>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Actions menu dropdown toggle
+    document.querySelectorAll('.actions-trigger').forEach(function(trigger) {
+        trigger.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var menu = this.nextElementSibling;
+            var isOpen = menu.classList.contains('show');
+            
+            // Close all other menus
+            document.querySelectorAll('.actions-menu-content.show').forEach(function(openMenu) {
+                if (openMenu !== menu) {
+                    openMenu.classList.remove('show');
+                }
+            });
+            
+            // Toggle current menu
+            menu.classList.toggle('show');
+            this.setAttribute('aria-expanded', !isOpen);
+        });
+    });
+
+    // Close menus when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.actions-menu')) {
+            document.querySelectorAll('.actions-menu-content.show').forEach(function(menu) {
+                menu.classList.remove('show');
+            });
+            document.querySelectorAll('.actions-trigger[aria-expanded="true"]').forEach(function(trigger) {
+                trigger.setAttribute('aria-expanded', 'false');
+            });
+        }
+    });
+
+    // Close menus on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.actions-menu-content.show').forEach(function(menu) {
+                menu.classList.remove('show');
+            });
+            document.querySelectorAll('.actions-trigger[aria-expanded="true"]').forEach(function(trigger) {
+                trigger.setAttribute('aria-expanded', 'false');
+            });
+        }
+    });
+});
+
+function updateCreateAccountId(role) {
+    fetch('../server/generate_id.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'role=' + encodeURIComponent(role)
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('createAccountId').value = data.id;
+    })
+    .catch(() => {});
+}
+
+// ===== Live validation for Create Account modal =====
+function setCreateMessage(input, message, isValid) {
+    const msgEl = input.parentElement.querySelector('.input-message');
+    if (msgEl) {
+        msgEl.textContent = message;
+        msgEl.style.color = isValid ? 'green' : 'red';
+    }
+}
+
+// Helper to find elements in the create account modal
+function getCreateInput(name) {
+    const modal = document.getElementById('create-account-modal');
+    return modal ? modal.querySelector('[name="' + name + '"]') : null;
+}
+
+// ===== Username validation =====
+const createUsername = getCreateInput('username');
+if (createUsername) {
+    createUsername.addEventListener('input', () => {
+        const val = createUsername.value.trim();
+        if (val === '') {
+            setCreateMessage(createUsername, 'Username is required.', false);
+            return;
+        }
+        if (!/^[a-z]+\.[a-z]+$/.test(val)) {
+            setCreateMessage(createUsername, 'Username must be lowercase with one dot (e.g., juan.dela).', false);
+            return;
+        }
+        setCreateMessage(createUsername, '', true);
+    });
+
+    createUsername.addEventListener('blur', () => {
+        const val = createUsername.value.trim();
+        if (!/^[a-z]+\.[a-z]+$/.test(val)) return;
+        
+        fetch('../server/check_username.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'username=' + encodeURIComponent(val)
+        })
+        .then(res => res.json())
+        .then(data => setCreateMessage(createUsername, data.message, data.available ?? data.valid))
+        .catch(() => setCreateMessage(createUsername, 'Server error.', false));
+    });
+}
+
+// ===== Email validation =====
+const createEmail = getCreateInput('email');
+if (createEmail) {
+    createEmail.addEventListener('input', () => {
+        const val = createEmail.value.trim();
+        if (val === '') {
+            setCreateMessage(createEmail, 'Email is required.', false);
+            return;
+        }
+        if (!val.includes('@')) {
+            setCreateMessage(createEmail, 'Please include @ in email address.', false);
+            return;
+        }
+        if (val.length < 5 || val.length > 70) {
+            setCreateMessage(createEmail, 'Email must be 5-70 characters.', false);
+            return;
+        }
+        setCreateMessage(createEmail, '', true);
+    });
+
+    createEmail.addEventListener('blur', () => {
+        const val = createEmail.value.trim();
+        if (!val.includes('@') || val.length < 5 || val.length > 70) return;
+        
+        fetch('../server/check_email.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'email=' + encodeURIComponent(val)
+        })
+        .then(res => res.json())
+        .then(data => setCreateMessage(createEmail, data.message, data.available ?? data.valid))
+        .catch(() => setCreateMessage(createEmail, 'Server error.', false));
+    });
+}
+
+// ===== Password strength =====
+const createPassword = getCreateInput('password');
+if (createPassword) {
+    createPassword.addEventListener('input', () => {
+        const val = createPassword.value;
+        let strength = 0;
+        let messages = [];
+        
+        if (val.length >= 8) strength++;
+        else messages.push('At least 8 characters');
+        if (/[A-Z]/.test(val)) strength++;
+        else messages.push('One uppercase letter');
+        if (/[a-z]/.test(val)) strength++;
+        else messages.push('One lowercase letter');
+        if (/[0-9]/.test(val)) strength++;
+        else messages.push('One number');
+        if (/[\W]/.test(val)) strength++;
+        else messages.push('One special character');
+        
+        if (messages.length === 0) {
+            setCreateMessage(createPassword, 'Strong password', true);
+        } else {
+            setCreateMessage(createPassword, 'Weak: ' + messages.join(', '), false);
+        }
+    });
+}
+
+// ===== Form submit validation =====
+const createForm = document.querySelector('#create-account-modal form');
+if (createForm) {
+    createForm.addEventListener('submit', e => {
+        const email = getCreateInput('email');
+        const username = getCreateInput('username');
+        const password = getCreateInput('password');
+        const role = getCreateInput('role');
+        
+        let firstInvalid = null;
+        
+        if (email && email.value.trim() === '') {
+            e.preventDefault();
+            setCreateMessage(email, 'Email is required.', false);
+            firstInvalid = email;
+        }
+        if (username && username.value.trim() === '') {
+            e.preventDefault();
+            setCreateMessage(username, 'Username is required.', false);
+            if (!firstInvalid) firstInvalid = username;
+        }
+        if (password && password.value.trim() === '') {
+            e.preventDefault();
+            setCreateMessage(password, 'Password is required.', false);
+            if (!firstInvalid) firstInvalid = password;
+        }
+        if (role && role.value === '') {
+            e.preventDefault();
+            setCreateMessage(role, 'Role is required.', false);
+            if (!firstInvalid) firstInvalid = role;
+        }
+        
+        if (firstInvalid) firstInvalid.focus();
+    });
+}
+</script>
