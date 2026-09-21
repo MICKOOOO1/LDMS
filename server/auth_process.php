@@ -113,7 +113,7 @@ if (isset($_POST['complete_account_setup_btn']) || (($_SERVER['REQUEST_METHOD'] 
     $country = trim($_POST['country'] ?? '');
     $zipCode = trim($_POST['zip_code'] ?? '');
 
-    if ($firstName === '' || $lastName === '' || $dob === '' || $age <= 0 || !in_array($sex, ['male', 'female'], true) || $email === '' || $username === '' || $purokStreet === '' || $barangay === '' || $city === '' || $province === '' || $country === '' || $zipCode === '') {
+    if ($firstName === '' || $lastName === '' || $dob === '' || $age < 18 || !in_array($sex, ['male', 'female'], true) || $email === '' || $username === '' || $purokStreet === '' || $barangay === '' || $city === '' || $province === '' || $country === '' || $zipCode === '') {
         $alerts[] = ['type' => 'error', 'message' => 'Please complete all profile fields.'];
     }
 
@@ -134,8 +134,8 @@ if (isset($_POST['complete_account_setup_btn']) || (($_SERVER['REQUEST_METHOD'] 
     }
 
     if (empty($alerts)) {
-        $updateStmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, dob=?, age=?, sex=?, email=?, username=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
-        $updateStmt->bind_param("sssssisssssssssi", $firstName, $middleName, $lastName, $extensionName, $dob, $age, $sex, $email, $username, $purokStreet, $barangay, $city, $province, $country, $zipCode, $setupUserId);
+        $updateStmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, dob=?, age=?, sex=?, email=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
+        $updateStmt->bind_param("sssssissssssssi", $firstName, $middleName, $lastName, $extensionName, $dob, $age, $sex, $email, $purokStreet, $barangay, $city, $province, $country, $zipCode, $setupUserId);
         if (!$updateStmt->execute()) {
             $alerts[] = ['type' => 'error', 'message' => 'Unable to save profile details.'];
         }
@@ -230,11 +230,11 @@ if (isset($_POST['update_profile_btn'])) {
 
     if (empty($alerts)) {
         if ($profilePicture !== null) {
-            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, username=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=?, profile_picture=? WHERE id=?");
-            $stmt->bind_param("sssssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $username, $purokStreet, $barangay, $city, $province, $country, $zipCode, $profilePicture, $userId);
+            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=?, profile_picture=? WHERE id=?");
+            $stmt->bind_param("sssssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $purokStreet, $barangay, $city, $province, $country, $zipCode, $profilePicture, $userId);
         } else {
-            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, username=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
-            $stmt->bind_param("ssssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $username, $purokStreet, $barangay, $city, $province, $country, $zipCode, $userId);
+            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
+            $stmt->bind_param("sssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $purokStreet, $barangay, $city, $province, $country, $zipCode, $userId);
         }
 
         if ($stmt->execute()) {
@@ -823,7 +823,7 @@ if (isset($_POST['forgot_request_otp_btn'])) {
         $alerts[] = ['type' => 'error', 'message' => 'Email or ID number is required.'];
     } else {
         // Find user by email or user_id
-        $stmt = $conn->prepare("SELECT id, user_id, email, first_name, last_name FROM users WHERE email = ? OR user_id = ?");
+        $stmt = $conn->prepare("SELECT id, user_id, email, first_name, last_name, account_status FROM users WHERE email = ? OR user_id = ?");
         $stmt->bind_param("ss", $identifier, $identifier);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -834,6 +834,13 @@ if (isset($_POST['forgot_request_otp_btn'])) {
         } else {
             $user = $result->fetch_assoc();
             $stmt->close();
+
+            if (($user['account_status'] ?? '') === 'blocked') {
+                $alerts[] = ['type' => 'error', 'message' => 'Cannot forgot password. Your account is blocked.'];
+                $_SESSION['alerts'] = $alerts;
+                header('Location: ../user/forgot_password.php');
+                exit;
+            }
 
             $fullName = trim($user['first_name'] . ' ' . $user['last_name']);
             $otp = create_otp($conn, $user['id'], $user['email'], 'password_reset', $fullName);
@@ -861,6 +868,18 @@ if (isset($_POST['change_password_btn'])) {
 
     if (!$user_id || !($_SESSION['reset_verified'] ?? false)) {
         $alerts[] = ['type' => 'error', 'message' => 'Session expired. Please complete the forgot password process again.'];
+    }
+
+    if ($user_id) {
+        $statusStmt = $conn->prepare("SELECT account_status FROM users WHERE id = ?");
+        $statusStmt->bind_param("i", $user_id);
+        $statusStmt->execute();
+        $status = $statusStmt->get_result()->fetch_assoc()['account_status'] ?? '';
+        $statusStmt->close();
+        if ($status === 'blocked') {
+            $alerts[] = ['type' => 'error', 'message' => 'Cannot forgot password. Your account is blocked.'];
+            unset($_SESSION['reset_user_id'], $_SESSION['reset_verified']);
+        }
     }
     $new_password = $_POST['password'] ?? '';
     $re_new_password = $_POST['re_password'] ?? '';

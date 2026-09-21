@@ -442,10 +442,36 @@ section.hero {
 
 .user-account-grid label {
   color: #33453b;
-  display: grid;
+  display: block;
   font-size: 13px;
   font-weight: 700;
-  gap: 6px;
+}
+
+.user-account-grid .field-label {
+  display: inline-block;
+}
+
+.user-account-grid .asterisk {
+  color: #d93025;
+  font-weight: 700;
+}
+
+.user-account-grid .input-message {
+  color: #d93025;
+  display: none;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.user-account-grid .input-message.show {
+  display: block;
+}
+
+.user-account-grid input,
+.user-account-grid select {
+  display: block;
+  margin-top: 6px;
+  width: 100%;
 }
 
 .user-account-grid input {

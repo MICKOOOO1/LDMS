@@ -8,7 +8,12 @@ require '_header.php';
 $alerts = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
 
+$superAdminCountResult = $conn->query("SELECT COUNT(*) AS total FROM users WHERE role = 'super_admin'");
+$superAdminCount = (int)($superAdminCountResult->fetch_assoc()['total'] ?? 0);
 $roleForId = $_POST['role'] ?? 'admin';
+if ($superAdminCount >= 2 && $roleForId === 'super_admin') {
+    $roleForId = 'admin';
+}
 $generatedId = generate_next_id($conn, $roleForId);
 
 render_super_admin_header('Create Administrator', 'create');
@@ -28,7 +33,7 @@ render_super_admin_header('Create Administrator', 'create');
         <label>Role
             <select name="role" id="roleSelect" required onchange="updateGeneratedId(this.value)">
                 <option value="admin"<?= $roleForId === 'admin' ? ' selected' : ''; ?>>Administrator</option>
-                <option value="super_admin"<?= $roleForId === 'super_admin' ? ' selected' : ''; ?>>Super Administrator</option>
+                <option value="super_admin"<?= $roleForId === 'super_admin' ? ' selected' : ''; ?><?= $superAdminCount >= 2 ? ' disabled' : ''; ?>>Super Administrator<?= $superAdminCount >= 2 ? ' (limit reached)' : ''; ?></option>
             </select>
         </label>
         <label>Employee ID
@@ -56,7 +61,7 @@ render_super_admin_header('Create Administrator', 'create');
             <input type="email" name="email" required>
         </label>
         <label>Username
-            <input type="text" name="username" required>
+            <input type="text" name="username" required pattern="[a-z]+\.[a-z]+" title="Use lowercase letters in the format name.name, with no spaces or numbers." autocomplete="off">
         </label>
         <label>Password
             <input type="password" name="password" required>

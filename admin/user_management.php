@@ -3,6 +3,8 @@ session_start();
 require '../server/config.php';
 require '../server/admin_helpers.php';
 require_admin_role(['admin']);
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 $alerts = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
@@ -16,10 +18,7 @@ $perPage = (int)($_GET['per_page'] ?? 10);
 $perPage = in_array($perPage, [10, 25, 50], true) ? $perPage : 10;
 $page = max(1, (int)($_GET['page'] ?? 1));
 
-$allAccounts = array_values(array_filter(
-    fetch_accounts($conn, $employeeId, $search, $roleFilter, $statusFilter, $sort),
-    fn($account) => ($account['role'] ?? '') !== 'super_admin'
-));
+$allAccounts = fetch_accounts($conn, $employeeId, $search, $roleFilter, $statusFilter, $sort);
 $totalAccounts = count($allAccounts);
 $totalPages = max(1, (int)ceil($totalAccounts / $perPage));
 $page = min($page, $totalPages);
@@ -33,6 +32,10 @@ function user_management_url(array $overrides = []): string {
         }
     }
     return 'user_management.php' . ($params ? '?' . http_build_query($params) : '');
+}
+
+function user_management_role_label(string $role): string {
+    return $role === 'super_admin' ? 'Super Admin' : ($role === 'admin' ? 'Admin' : 'User');
 }
 
 function account_status_label(string $status): string {
@@ -82,6 +85,7 @@ render_admin_header('User Management', 'user_management');
                     <option value="">All Roles</option>
                     <option value="user" <?= $roleFilter === 'user' ? 'selected' : ''; ?>>User</option>
                     <option value="admin" <?= $roleFilter === 'admin' ? 'selected' : ''; ?>>Admin</option>
+                    <option value="super_admin" <?= $roleFilter === 'super_admin' ? 'selected' : ''; ?>>Super Admin</option>
                 </select>
                         <select name="status" aria-label="Filter by status">
                             <option value="">All Status</option>
@@ -125,7 +129,7 @@ render_admin_header('User Management', 'user_management');
                             <td><strong><?= htmlspecialchars(full_name($account)); ?></strong></td>
                             <td><?= htmlspecialchars($account['email']); ?></td>
                             <td><?= htmlspecialchars($account['username']); ?></td>
-                            <td><span class="role-pill role-<?= htmlspecialchars($account['role']); ?>"><?= htmlspecialchars($account['role'] === 'user' ? 'User' : 'Admin'); ?></span></td>
+                            <td><span class="role-pill role-<?= htmlspecialchars($account['role']); ?>"><?= htmlspecialchars(user_management_role_label($account['role'])); ?></span></td>
                             <td><span class="approval-pill approval-<?= htmlspecialchars($status); ?>"><?= htmlspecialchars(ucfirst($status)); ?></span></td>
                             <?php $onlineStatus = account_online_status($account); ?>
                             <td><span class="status-pill status-<?= htmlspecialchars($onlineStatus); ?>"><?= htmlspecialchars(ucfirst($onlineStatus)); ?></span></td>
@@ -178,7 +182,7 @@ render_admin_header('User Management', 'user_management');
                     <label>Last Name<input type="text" name="last_name" value="<?= htmlspecialchars($account['last_name']); ?>" required></label>
                     <label>Extension<input type="text" name="extension_name" value="<?= htmlspecialchars($account['extension_name'] ?? ''); ?>"></label>
                     <label>Email<input type="email" name="email" value="<?= htmlspecialchars($account['email']); ?>" required></label>
-                    <label>Username<input type="text" name="username" value="<?= htmlspecialchars($account['username']); ?>" required></label>
+                    <label>Username<input type="text" name="username" value="<?= htmlspecialchars($account['username']); ?>" required readonly></label>
                     <label>Purok/Street<input type="text" name="purok_street" value="<?= htmlspecialchars($account['purok_street']); ?>"></label>
                     <label>Barangay<input type="text" name="barangay" value="<?= htmlspecialchars($account['barangay']); ?>"></label>
                     <label>City/Municipality<input type="text" name="city_municipality" value="<?= htmlspecialchars($account['city_municipality']); ?>"></label>

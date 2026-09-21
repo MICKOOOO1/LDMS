@@ -91,11 +91,11 @@ if (isset($_POST['update_own_profile_btn'])) {
 
     if (empty($alerts)) {
         if ($profilePicture !== null) {
-            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, username=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=?, profile_picture=? WHERE id=?");
-            $stmt->bind_param("sssssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $username, $purokStreet, $barangay, $city, $province, $country, $zipCode, $profilePicture, $userId);
+            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=?, profile_picture=? WHERE id=?");
+            $stmt->bind_param("sssssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $purokStreet, $barangay, $city, $province, $country, $zipCode, $profilePicture, $userId);
         } else {
-            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, username=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
-            $stmt->bind_param("ssssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $username, $purokStreet, $barangay, $city, $province, $country, $zipCode, $userId);
+            $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
+            $stmt->bind_param("sssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $purokStreet, $barangay, $city, $province, $country, $zipCode, $userId);
         }
 
         if ($stmt->execute()) {
@@ -290,8 +290,8 @@ if (isset($_POST['update_account_btn'])) {
     if ($targetId <= 0 || $firstName === '' || $lastName === '' || $email === '' || $username === '') {
         $alerts[] = ['type' => 'error', 'message' => 'Required account fields are missing.'];
     } else {
-        $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, username=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
-        $stmt->bind_param("ssssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $username, $purokStreet, $barangay, $city, $province, $country, $zipCode, $targetId);
+        $stmt = $conn->prepare("UPDATE users SET first_name=?, middle_name=?, last_name=?, extension_name=?, email=?, purok_street=?, barangay=?, city_municipality=?, province=?, country=?, zip_code=? WHERE id=?");
+        $stmt->bind_param("sssssssssssi", $firstName, $middleName, $lastName, $extensionName, $email, $purokStreet, $barangay, $city, $province, $country, $zipCode, $targetId);
         $alerts[] = $stmt->execute()
             ? ['type' => 'success', 'message' => 'Account information updated.']
             : ['type' => 'error', 'message' => 'Unable to update account information.'];
@@ -308,12 +308,30 @@ if (isset($_POST['save_privileges_btn'])) {
     }
 
     $targetId = (int)($_POST['target_id'] ?? 0);
-    $allowed = ['manage_registration', 'update_accounts', 'request_delete'];
+    if ($targetId === (int)$_SESSION['user_id']) {
+        $alerts[] = ['type' => 'error', 'message' => 'You cannot change your own privileges.'];
+        finish_admin_action($alerts, $redirect);
+    }
+
+    $targetStmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
+    $targetStmt->bind_param("i", $targetId);
+    $targetStmt->execute();
+    $target = $targetStmt->get_result()->fetch_assoc();
+    $targetStmt->close();
+
+    if (!$target || !in_array($target['role'], ['admin', 'super_admin'], true)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Privileges can only be updated for admin or super admin accounts.'];
+        finish_admin_action($alerts, $redirect);
+    }
+
+    $allowed = $target['role'] === 'super_admin'
+        ? ['manage_accounts', 'manage_privileges', 'delete_accounts']
+        : ['manage_registration', 'update_accounts', 'request_delete'];
     $selected = array_values(array_intersect($_POST['privileges'] ?? [], $allowed));
     $privileges = implode(',', $selected);
 
-    $stmt = $conn->prepare("UPDATE users SET privileges = ? WHERE id = ? AND role IN ('admin', 'super_admin')");
-    $stmt->bind_param("si", $privileges, $targetId);
+    $stmt = $conn->prepare("UPDATE users SET privileges = ? WHERE id = ? AND role = ?");
+    $stmt->bind_param("sis", $privileges, $targetId, $target['role']);
     $alerts[] = $stmt->execute()
         ? ['type' => 'success', 'message' => 'Privileges updated.']
         : ['type' => 'error', 'message' => 'Unable to update privileges.'];
@@ -436,6 +454,18 @@ if (isset($_POST['create_staff_btn'])) {
     }
 
     $newRole = $_POST['role'] ?? 'admin';
+
+    if ($newRole === 'super_admin') {
+        $countStmt = $conn->prepare("SELECT COUNT(*) AS total FROM users WHERE role = 'super_admin'");
+        $countStmt->execute();
+        $superAdminCount = (int)($countStmt->get_result()->fetch_assoc()['total'] ?? 0);
+        $countStmt->close();
+
+        if ($superAdminCount >= 2) {
+            finish_admin_action([['type' => 'error', 'message' => 'The maximum of 2 super admin accounts has already been reached.']], $redirect);
+        }
+    }
+
     $userId = generate_next_id($conn, $newRole);
     
     // Ensure unique ID by checking and regenerating if needed
@@ -481,6 +511,8 @@ if (isset($_POST['create_staff_btn'])) {
 
     if (!in_array($newRole, ['admin', 'super_admin'], true) || $email === '' || $username === '' || $password === '') {
         $alerts[] = ['type' => 'error', 'message' => 'Please complete all required admin account fields.'];
+    } elseif (!preg_match('/^[a-z]+\.[a-z]+$/', $username)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Username must use lowercase letters in the format name.name, with no spaces or numbers.'];
     } else {
         $duplicateStmt = $conn->prepare("SELECT user_id, email, username FROM users WHERE user_id = ? OR email = ? OR username = ? LIMIT 1");
         $duplicateStmt->bind_param("sss", $userId, $email, $username);
@@ -556,7 +588,7 @@ if (isset($_POST['change_role_btn'])) {
     }
 
     $targetId = (int)($_POST['target_id'] ?? 0);
-    $newRole = $_POST['role'] ?? '';
+    $newRole = trim((string)($_POST['role'] ?? ''));
 
     if ($targetId <= 0 || !in_array($newRole, ['user', 'admin', 'super_admin'], true)) {
         $alerts[] = ['type' => 'error', 'message' => 'Invalid role or target account.'];
@@ -580,11 +612,31 @@ if (isset($_POST['change_role_btn'])) {
             }
 
             $stmt = $conn->prepare("UPDATE users SET role = ?, privileges = ? WHERE id = ?");
-            $stmt->bind_param("ssi", $newRole, $defaultPrivileges, $targetId);
-            $alerts[] = $stmt->execute()
-                ? ['type' => 'success', 'message' => 'Role updated successfully.']
-                : ['type' => 'error', 'message' => 'Unable to update role.'];
-            $stmt->close();
+            if (!$stmt) {
+                $alerts[] = ['type' => 'error', 'message' => 'Unable to prepare the role update.'];
+            } else {
+                $stmt->bind_param("ssi", $newRole, $defaultPrivileges, $targetId);
+                if ($stmt->execute()) {
+                    $sessionStmt = $conn->prepare("UPDATE active_sessions SET role = ? WHERE user_id = ?");
+                    if ($sessionStmt) {
+                        $sessionStmt->bind_param("si", $newRole, $targetId);
+                        $sessionStmt->execute();
+                        $sessionStmt->close();
+                    }
+
+                    $logStmt = $conn->prepare("UPDATE login_logs SET role = ? WHERE user_id = ? AND time_out IS NULL");
+                    if ($logStmt) {
+                        $logStmt->bind_param("si", $newRole, $targetId);
+                        $logStmt->execute();
+                        $logStmt->close();
+                    }
+
+                    $alerts[] = ['type' => 'success', 'message' => 'Role updated successfully.'];
+                } else {
+                    $alerts[] = ['type' => 'error', 'message' => 'Unable to update role: ' . $stmt->error];
+                }
+                $stmt->close();
+            }
         }
     }
 
@@ -610,7 +662,7 @@ if (isset($_POST['reset_password_btn'])) {
     } elseif ($targetId === (int)$_SESSION['user_id']) {
         $alerts[] = ['type' => 'error', 'message' => 'You cannot reset your own password from here.'];
     } else {
-        $targetStmt = $conn->prepare("SELECT id FROM users WHERE id = ?");
+        $targetStmt = $conn->prepare("SELECT id, account_status FROM users WHERE id = ?");
         $targetStmt->bind_param("i", $targetId);
         $targetStmt->execute();
         $target = $targetStmt->get_result()->fetch_assoc();
@@ -618,6 +670,8 @@ if (isset($_POST['reset_password_btn'])) {
 
         if (!$target) {
             $alerts[] = ['type' => 'error', 'message' => 'Account not found.'];
+        } elseif (($target['account_status'] ?? '') === 'blocked') {
+            $alerts[] = ['type' => 'error', 'message' => 'Blocked accounts cannot have their password reset.'];
         } else {
             $hash = password_hash($newPassword, PASSWORD_DEFAULT);
             $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE id = ?");

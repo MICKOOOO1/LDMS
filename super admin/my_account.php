@@ -64,7 +64,7 @@ render_super_admin_header('My Account', 'account');
                 <label>Extension<input type="text" name="extension_name" value="<?= htmlspecialchars($account['extension_name'] ?? ''); ?>"></label>
                 <label>Employee ID<input type="text" value="<?= htmlspecialchars($account['user_id']); ?>" readonly></label>
                 <label>Email<input type="email" name="email" value="<?= htmlspecialchars($account['email']); ?>" required></label>
-                <label>Username<input type="text" name="username" value="<?= htmlspecialchars($account['username']); ?>" required></label>
+                <label>Username<input type="text" name="username" value="<?= htmlspecialchars($account['username']); ?>" required readonly></label>
                 <label>Date of Birth<input type="date" value="<?= htmlspecialchars($account['dob']); ?>" readonly></label>
                 <label>Age<input type="number" value="<?= (int)$account['age']; ?>" readonly></label>
                 <label>Sex<input type="text" value="<?= htmlspecialchars(ucfirst($account['sex'])); ?>" readonly></label>

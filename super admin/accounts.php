@@ -3,6 +3,8 @@ session_start();
 require '../server/config.php';
 require '../server/admin_helpers.php';
 require_admin_role(['super_admin']);
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 require '_header.php';
 
 $alerts = $_SESSION['alerts'] ?? [];
@@ -11,6 +13,8 @@ unset($_SESSION['alerts']);
 // For Create Account modal - auto-generate ID
 $createRoleDefault = 'admin';
 $createAccountId = generate_next_id($conn, $createRoleDefault);
+$superAdminCountResult = $conn->query("SELECT COUNT(*) AS total FROM users WHERE role = 'super_admin'");
+$superAdminCount = (int)($superAdminCountResult->fetch_assoc()['total'] ?? 0);
 
 $employeeId = trim($_GET['employee_id'] ?? '');
 $search = trim($_GET['search'] ?? '');
@@ -143,12 +147,16 @@ render_super_admin_header('User Management', 'accounts');
                                 <div class="actions-menu-content">
                                     <a href="#view-account-<?= (int)$account['id']; ?>" class="action-item">View</a>
                                     <a href="#edit-account-<?= (int)$account['id']; ?>" class="action-item">Edit</a>
-                                    <a href="#role-privilege-<?= (int)$account['id']; ?>" class="action-item">Role and Privilege</a>
+                                    <?php if ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
+                                        <a href="#role-privilege-<?= (int)$account['id']; ?>" class="action-item">Role and Privilege</a>
+                                    <?php endif; ?>
                                     <?php if ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
                                         <a href="#block-account-<?= (int)$account['id']; ?>" class="action-item <?= $status === 'blocked' ? 'unblock-text' : ''; ?>">
                                             <?= $status === 'blocked' ? 'Unblock' : 'Block' ?>
                                         </a>
-                                        <a href="#reset-password-<?= (int)$account['id']; ?>" class="action-item">Reset Password</a>
+                                        <?php if ($status !== 'blocked'): ?>
+                                            <a href="#reset-password-<?= (int)$account['id']; ?>" class="action-item">Reset Password</a>
+                                        <?php endif; ?>
                                         <a href="#delete-account-<?= (int)$account['id']; ?>" class="action-item danger">Delete</a>
                                     <?php endif; ?>
                                 </div>
@@ -224,7 +232,7 @@ render_super_admin_header('User Management', 'accounts');
                 <label>Last Name<input type="text" name="last_name" value="<?= htmlspecialchars($account['last_name']); ?>" required></label>
                 <label>Extension<input type="text" name="extension_name" value="<?= htmlspecialchars($account['extension_name'] ?? ''); ?>"></label>
                 <label>Email<input type="email" name="email" value="<?= htmlspecialchars($account['email']); ?>" required></label>
-                <label>Username<input type="text" name="username" value="<?= htmlspecialchars($account['username']); ?>" required></label>
+                <label>Username<input type="text" name="username" value="<?= htmlspecialchars($account['username']); ?>" required readonly></label>
                 <label>Purok/Street<input type="text" name="purok_street" value="<?= htmlspecialchars($account['purok_street']); ?>"></label>
                 <label>Barangay<input type="text" name="barangay" value="<?= htmlspecialchars($account['barangay']); ?>"></label>
                 <label>City/Municipality<input type="text" name="city_municipality" value="<?= htmlspecialchars($account['city_municipality']); ?>"></label>
@@ -239,10 +247,11 @@ render_super_admin_header('User Management', 'accounts');
         </section>
     </div>
 
+    <?php if ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
     <!-- Role and Privilege Modal -->
     <div id="role-privilege-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
         <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
-        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="role-privilege-title-<?= (int)$account['id']; ?>">
+        <section class="account-modal-card role-privilege-modal-card" role="dialog" aria-modal="true" aria-labelledby="role-privilege-title-<?= (int)$account['id']; ?>">
             <div class="account-modal-header">
                 <div>
                     <h2 id="role-privilege-title-<?= (int)$account['id']; ?>">Role and Privilege</h2>
@@ -281,11 +290,13 @@ render_super_admin_header('User Management', 'accounts');
             <?php endif; ?>
         </section>
     </div>
+    <?php endif; ?>
 
+    <?php if ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
     <!-- Block/Unblock Modal -->
     <div id="block-account-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
         <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
-        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="block-account-title-<?= (int)$account['id']; ?>">
+        <section class="account-modal-card compact-modal" role="dialog" aria-modal="true" aria-labelledby="block-account-title-<?= (int)$account['id']; ?>">
             <div class="account-modal-header">
                 <div>
                     <h2 id="block-account-title-<?= (int)$account['id']; ?>"><?= $status === 'blocked' ? 'Unblock Account' : 'Block Account' ?></h2>
@@ -305,7 +316,9 @@ render_super_admin_header('User Management', 'accounts');
             </form>
         </section>
     </div>
+    <?php endif; ?>
 
+    <?php if ($status !== 'blocked'): ?>
     <!-- Reset Password Modal -->
     <div id="reset-password-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
         <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
@@ -329,11 +342,13 @@ render_super_admin_header('User Management', 'accounts');
             </form>
         </section>
     </div>
+    <?php endif; ?>
 
+    <?php if ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
     <!-- Delete Account Modal -->
     <div id="delete-account-<?= (int)$account['id']; ?>" class="account-modal" aria-hidden="true">
         <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
-        <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="delete-account-title-<?= (int)$account['id']; ?>">
+        <section class="account-modal-card compact-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title-<?= (int)$account['id']; ?>">
             <div class="account-modal-header">
                 <div>
                     <h2 id="delete-account-title-<?= (int)$account['id']; ?>">Delete Account</h2>
@@ -349,11 +364,12 @@ render_super_admin_header('User Management', 'accounts');
             </form>
         </section>
     </div>
+    <?php endif; ?>
 <?php endforeach; ?>
 
 <div id="create-account-modal" class="account-modal" aria-hidden="true">
     <a href="#" class="account-modal-backdrop" aria-label="Close modal"></a>
-    <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="create-account-title">
+    <section class="account-modal-card create-account-modal-card" role="dialog" aria-modal="true" aria-labelledby="create-account-title">
         <div class="account-modal-header">
             <div>
                 <h2 id="create-account-title">Create Account</h2>
@@ -367,7 +383,7 @@ render_super_admin_header('User Management', 'accounts');
             <label>Role <span class="asterisk">*</span>
                 <select name="role" id="createRoleSelect" required onchange="updateCreateAccountId(this.value)">
                     <option value="admin"<?= $createRoleDefault === 'admin' ? ' selected' : ''; ?>>Administrator</option>
-                    <option value="super_admin"<?= $createRoleDefault === 'super_admin' ? ' selected' : ''; ?>>Super Administrator</option>
+                    <option value="super_admin"<?= $createRoleDefault === 'super_admin' ? ' selected' : ''; ?><?= $superAdminCount >= 2 ? ' disabled' : ''; ?>>Super Administrator<?= $superAdminCount >= 2 ? ' (limit reached)' : ''; ?></option>
                 </select>
                 <small class="input-message"></small>
             </label>
@@ -380,7 +396,7 @@ render_super_admin_header('User Management', 'accounts');
                 <small class="input-message"></small>
             </label>
             <label>Username <span class="asterisk">*</span>
-                <input type="text" name="username" required>
+                <input type="text" name="username" required pattern="[a-z]+\.[a-z]+" title="Use lowercase letters in the format name.name, with no spaces or numbers." autocomplete="off">
                 <small class="input-message"></small>
             </label>
             <label>Password <span class="asterisk">*</span>
@@ -404,7 +420,8 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             e.stopPropagation();
             
-            var menu = this.nextElementSibling;
+            var menu = this._actionsMenu || this.nextElementSibling;
+            this._actionsMenu = menu;
             var isOpen = menu.classList.contains('show');
             
             // Close all other menus
@@ -417,12 +434,20 @@ document.addEventListener('DOMContentLoaded', function() {
             // Toggle current menu
             menu.classList.toggle('show');
             this.setAttribute('aria-expanded', !isOpen);
+
+            if (!isOpen) {
+                var triggerRect = this.getBoundingClientRect();
+                document.body.appendChild(menu);
+                menu.classList.add('is-floating');
+                menu.style.left = Math.max(8, triggerRect.right - menu.offsetWidth) + 'px';
+                menu.style.top = Math.min(window.innerHeight - menu.offsetHeight - 8, triggerRect.bottom + 6) + 'px';
+            }
         });
     });
 
     // Close menus when clicking outside
     document.addEventListener('click', function(e) {
-        if (!e.target.closest('.actions-menu')) {
+        if (!e.target.closest('.actions-menu, .actions-menu-content')) {
             document.querySelectorAll('.actions-menu-content.show').forEach(function(menu) {
                 menu.classList.remove('show');
             });

@@ -8,6 +8,15 @@ $email = $_SESSION['otp_email'] ?? '';
 $purpose = $_SESSION['otp_purpose'] ?? 'account_activation';
 $user_id = $_SESSION['otp_user_id'] ?? 0;
 
+function is_account_blocked(mysqli $conn, int $userId): bool {
+    $stmt = $conn->prepare("SELECT account_status FROM users WHERE id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $account = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return ($account['account_status'] ?? '') === 'blocked';
+}
+
 function mask_email_address(string $email): string {
     $parts = explode('@', $email, 2);
     if (count($parts) !== 2) {
@@ -34,7 +43,7 @@ if ($step === 'email') {
         if (empty($email)) {
             $alerts[] = ['type' => 'error', 'message' => 'Email is required.'];
         } else {
-            $stmt = $conn->prepare("SELECT id, first_name, last_name, role FROM users WHERE email = ?");
+            $stmt = $conn->prepare("SELECT id, first_name, last_name, role, account_status FROM users WHERE email = ?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -45,6 +54,13 @@ if ($step === 'email') {
             } else {
                 $user = $result->fetch_assoc();
                 $stmt->close();
+
+                if (($user['account_status'] ?? '') === 'blocked') {
+                    $alerts[] = ['type' => 'error', 'message' => 'Cannot forgot password. Your account is blocked.'];
+                    $_SESSION['alerts'] = $alerts;
+                    header('Location: forgot_password.php');
+                    exit;
+                }
                 
                 $fullName = trim($user['first_name'] . ' ' . $user['last_name']);
                 $otp = create_otp($conn, $user['id'], $email, $purpose, $fullName);
@@ -74,6 +90,8 @@ if ($step === 'email') {
         
         if (empty($otp)) {
             $alerts[] = ['type' => 'error', 'message' => 'Please enter the OTP.'];
+        } elseif ($purpose === 'password_reset' && is_account_blocked($conn, $user_id)) {
+            $alerts[] = ['type' => 'error', 'message' => 'Cannot forgot password. Your account is blocked.'];
         } elseif (verify_otp($conn, $user_id, $otp, $purpose)) {
             if ($purpose === 'account_activation') {
                 // Activate account
