@@ -92,9 +92,9 @@ function setup_display_value(array $account, string $field): string {
                 </div>
                 <div class="user-account-grid">
                     <label><span class="field-label">First Name <span class="asterisk">*</span></span><input type="text" name="first_name" value="<?= htmlspecialchars($account['first_name']); ?>" required><small class="input-message"></small></label>
-                    <label>Middle Name<input type="text" name="middle_name" value="<?= htmlspecialchars($account['middle_name'] ?? ''); ?>"></label>
+                    <label>Middle Name <span class="optional">(optional)</span><input type="text" name="middle_name" value="<?= htmlspecialchars($account['middle_name'] ?? ''); ?>"></label>
                     <label><span class="field-label">Last Name <span class="asterisk">*</span></span><input type="text" name="last_name" value="<?= htmlspecialchars($account['last_name']); ?>" required><small class="input-message"></small></label>
-                    <label>Extension<input type="text" name="extension_name" value="<?= htmlspecialchars($account['extension_name'] ?? ''); ?>"></label>
+                    <label>Extension <span class="optional">(optional)</span><input type="text" name="extension_name" value="<?= htmlspecialchars($account['extension_name'] ?? ''); ?>"></label>
                     <label>ID Number<input type="text" value="<?= htmlspecialchars($account['user_id']); ?>" readonly></label>
                     <label><span class="field-label">Email <span class="asterisk">*</span></span><input type="email" name="email" value="<?= htmlspecialchars($account['email']); ?>" required><small class="input-message"></small></label>
                     <label><span class="field-label">Username <span class="asterisk">*</span></span><input type="text" name="username" value="<?= htmlspecialchars($account['username']); ?>" required readonly><small class="input-message"></small></label>

@@ -101,6 +101,20 @@ ensure_table($conn, 'login_logs', "CREATE TABLE login_logs (
     INDEX idx_login_logs_user_id (user_id)
 )");
 
+ensure_table($conn, 'account_action_logs', "CREATE TABLE account_action_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id INT NULL,
+    actor_employee_id VARCHAR(15) NOT NULL,
+    actor_name VARCHAR(160) NOT NULL,
+    actor_role VARCHAR(20) NOT NULL,
+    action VARCHAR(40) NOT NULL,
+    details TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_account_action_logs_created_at (created_at),
+    INDEX idx_account_action_logs_actor_role (actor_role),
+    INDEX idx_account_action_logs_action (action)
+)");
+
 ensure_table($conn, 'active_sessions', "CREATE TABLE active_sessions (
     user_id INT PRIMARY KEY,
     role ENUM('user','admin','super_admin') NOT NULL,

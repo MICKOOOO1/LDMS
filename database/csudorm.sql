@@ -83,6 +83,20 @@ CREATE TABLE login_logs (
     INDEX idx_login_logs_user_id (user_id)
 );
 
+CREATE TABLE account_action_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id INT NULL,
+    actor_employee_id VARCHAR(15) NOT NULL,
+    actor_name VARCHAR(160) NOT NULL,
+    actor_role VARCHAR(20) NOT NULL,
+    action VARCHAR(40) NOT NULL,
+    details TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_account_action_logs_created_at (created_at),
+    INDEX idx_account_action_logs_actor_role (actor_role),
+    INDEX idx_account_action_logs_action (action)
+);
+
 INSERT INTO users (
     user_id, first_name, middle_name, last_name, extension_name, dob, age, sex,
     email, username, password_hash, role, account_status, privileges,

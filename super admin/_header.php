@@ -25,7 +25,10 @@ function render_super_admin_header(string $title, string $active): void {
             <?php endforeach; ?>
             <a href="logs.php" class="<?= $active === 'logs' ? 'active' : ''; ?>">System Logs</a>
             <a href="my_account.php" class="<?= $active === 'account' ? 'active' : ''; ?>">My Account</a>
-            <span><?= htmlspecialchars($_SESSION['name'] ?? 'Super Admin'); ?></span>
+            <div class="sidebar-user">
+                <span class="sidebar-user-name"><?= htmlspecialchars($_SESSION['name'] ?? 'Super Admin'); ?></span>
+                <span class="sidebar-user-role">Super Admin</span>
+            </div>
             <a href="../user/logout.php">Logout</a>
         </nav>
     </header>

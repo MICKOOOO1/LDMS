@@ -182,6 +182,10 @@ section h1 {
   background: #ffffff;
 }
 
+.input-box input[type="password"]::-ms-reveal {
+  display: none;
+}
+
 .input-box i {
   position: absolute;
   right: 15px;

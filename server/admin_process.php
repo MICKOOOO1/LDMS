@@ -206,6 +206,8 @@ if (isset($_POST['change_status_btn']) || isset($_POST['block_account_btn']) || 
                         $secStmt->close();
                     }
 
+                    log_account_action($conn, 'create_account', 'Approved registration and created user account ' . full_name($pending) . ' (' . $userId . ').');
+
                     // Mark pending as approved
                     $updateStmt = $conn->prepare("UPDATE pending_registrations SET status = 'approved', reviewed_by = ?, reviewed_at = NOW() WHERE id = ?");
                     $updateStmt->bind_param("ii", $_SESSION['user_id'], $targetId);
@@ -239,7 +241,7 @@ if (isset($_POST['change_status_btn']) || isset($_POST['block_account_btn']) || 
         } elseif ($targetId === (int)$_SESSION['user_id']) {
             $alerts[] = ['type' => 'error', 'message' => 'You cannot change your own account status.'];
         } else {
-            $targetStmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
+            $targetStmt = $conn->prepare("SELECT user_id, first_name, middle_name, last_name, extension_name, role, account_status FROM users WHERE id = ?");
             $targetStmt->bind_param("i", $targetId);
             $targetStmt->execute();
             $target = $targetStmt->get_result()->fetch_assoc();
@@ -256,9 +258,19 @@ if (isset($_POST['change_status_btn']) || isset($_POST['block_account_btn']) || 
                 } else {
                     $stmt = $conn->prepare("UPDATE users SET account_status = ? WHERE id = ?");
                     $stmt->bind_param("si", $status, $targetId);
-                    $alerts[] = $stmt->execute()
-                        ? ['type' => 'success', 'message' => $status === 'blocked' ? 'Account blocked.' : 'Account unblocked and approved.']
-                        : ['type' => 'error', 'message' => 'Unable to update account status.'];
+                    if ($stmt->execute()) {
+                        $alerts[] = ['type' => 'success', 'message' => $status === 'blocked' ? 'Account blocked.' : 'Account unblocked and approved.'];
+                        if ($status === 'blocked' || ($status === 'approved' && $target['account_status'] === 'blocked')) {
+                            $action = $status === 'blocked' ? 'block_account' : 'unblock_account';
+                            $actionLabel = $status === 'blocked' ? 'Blocked' : 'Unblocked';
+                            log_account_action($conn, $action, $actionLabel . ' account ' . full_name($target) . ' (' . $target['user_id'] . ').');
+                        }
+                        if ($status === 'approved' && isset($_POST['unblock_account_btn']) && $role === 'super_admin') {
+                            $_SESSION['open_role_privilege_id'] = $targetId;
+                        }
+                    } else {
+                        $alerts[] = ['type' => 'error', 'message' => 'Unable to update account status.'];
+                    }
                     $stmt->close();
                 }
             }
@@ -326,7 +338,7 @@ if (isset($_POST['save_privileges_btn'])) {
 
     $allowed = $target['role'] === 'super_admin'
         ? ['manage_accounts', 'manage_privileges', 'delete_accounts']
-        : ['manage_registration', 'update_accounts', 'request_delete'];
+        : ['manage_registration', 'update_accounts', 'request_delete', 'delete_accounts'];
     $selected = array_values(array_intersect($_POST['privileges'] ?? [], $allowed));
     $privileges = implode(',', $selected);
 
@@ -341,8 +353,8 @@ if (isset($_POST['save_privileges_btn'])) {
 }
 
 if (isset($_POST['delete_account_btn'])) {
-    if ($role !== 'super_admin') {
-        $alerts[] = ['type' => 'error', 'message' => 'Only the super admin can delete accounts.'];
+    if ($role !== 'super_admin' && !admin_has_privilege('delete_accounts')) {
+        $alerts[] = ['type' => 'error', 'message' => 'You do not have permission to delete accounts.'];
         finish_admin_action($alerts, $redirect);
     }
 
@@ -354,27 +366,55 @@ if (isset($_POST['delete_account_btn'])) {
     } elseif ($targetId === (int)$_SESSION['user_id']) {
         $alerts[] = ['type' => 'error', 'message' => 'You cannot delete your own account.'];
     } else {
-        // Delete related records first
-        $conn->prepare("DELETE FROM security_questions WHERE user_id = (SELECT user_id FROM users WHERE id = ?)")->bind_param("i", $targetId)->execute();
-        $conn->prepare("DELETE FROM login_logs WHERE user_id = ?")->bind_param("i", $targetId)->execute();
-        $conn->prepare("DELETE FROM active_sessions WHERE user_id = ?")->bind_param("i", $targetId)->execute();
-        $conn->prepare("DELETE FROM otp_codes WHERE user_id = ?")->bind_param("i", $targetId)->execute();
-        
-        $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
-        $stmt->bind_param("i", $targetId);
-        $alerts[] = $stmt->execute()
-            ? ['type' => 'success', 'message' => 'Account deleted.']
-            : ['type' => 'error', 'message' => 'Unable to delete account.'];
-        $stmt->close();
+        $targetStmt = $conn->prepare("SELECT user_id, first_name, middle_name, last_name, extension_name, role FROM users WHERE id = ?");
+        $targetStmt->bind_param("i", $targetId);
+        $targetStmt->execute();
+        $target = $targetStmt->get_result()->fetch_assoc();
+        $targetStmt->close();
+
+        if (!$target) {
+            $alerts[] = ['type' => 'error', 'message' => 'Account not found.'];
+        } elseif ($role === 'admin' && $target['role'] === 'super_admin') {
+            $alerts[] = ['type' => 'error', 'message' => 'Administrators cannot delete a super admin account.'];
+        } else {
+            $targetUserId = $target['user_id'];
+            $stmt = $conn->prepare("DELETE FROM security_questions WHERE user_id = ?");
+            $stmt->bind_param("s", $targetUserId);
+            $stmt->execute();
+            $stmt->close();
+
+            $stmt = $conn->prepare("DELETE FROM login_logs WHERE user_id = ?");
+            $stmt->bind_param("i", $targetId);
+            $stmt->execute();
+            $stmt->close();
+
+            $stmt = $conn->prepare("DELETE FROM active_sessions WHERE user_id = ?");
+            $stmt->bind_param("i", $targetId);
+            $stmt->execute();
+            $stmt->close();
+
+            $stmt = $conn->prepare("DELETE FROM otp_codes WHERE user_id = ?");
+            $stmt->bind_param("i", $targetId);
+            $stmt->execute();
+            $stmt->close();
+
+            $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+            $stmt->bind_param("i", $targetId);
+            if ($stmt->execute()) {
+                $alerts[] = ['type' => 'success', 'message' => 'Account deleted.'];
+                log_account_action($conn, 'delete_account', 'Deleted account ' . full_name($target) . ' (' . $targetUserId . '), role ' . $target['role'] . '. Reason: ' . $reason);
+            } else {
+                $alerts[] = ['type' => 'error', 'message' => 'Unable to delete account.'];
+            }
+            $stmt->close();
+        }
     }
 
     finish_admin_action($alerts, $redirect);
 }
 
 if (isset($_POST['request_delete_btn'])) {
-    finish_admin_action([['type' => 'error', 'message' => 'Only the super admin can delete accounts.']], $redirect);
-
-    if ($role === 'admin' && !admin_has_privilege('request_delete')) {
+    if ($role !== 'admin' || !admin_has_privilege('request_delete')) {
         finish_admin_action([['type' => 'error', 'message' => 'You do not have delete request privileges.']], $redirect);
     }
 
@@ -396,14 +436,19 @@ if (isset($_POST['request_delete_btn'])) {
         $alerts[] = ['type' => 'error', 'message' => 'Account not found.'];
     } elseif ($target['role'] === 'super_admin') {
         $alerts[] = ['type' => 'error', 'message' => 'Administrators cannot request deletion of a super admin account.'];
+    } elseif ($targetId === (int)$_SESSION['user_id']) {
+        $alerts[] = ['type' => 'error', 'message' => 'You cannot request deletion of your own account.'];
     } else {
         $snapshot = json_encode($target, JSON_PRETTY_PRINT);
         $requester = (int)$_SESSION['user_id'];
         $stmt = $conn->prepare("INSERT INTO delete_requests (requested_by, target_user, reason, user_snapshot) VALUES (?, ?, ?, ?)");
         $stmt->bind_param("iiss", $requester, $targetId, $reason, $snapshot);
-        $alerts[] = $stmt->execute()
-            ? ['type' => 'success', 'message' => 'Delete request sent to the super admin.']
-            : ['type' => 'error', 'message' => 'Unable to send delete request.'];
+        if ($stmt->execute()) {
+            $alerts[] = ['type' => 'success', 'message' => 'Delete request sent to the super admin.'];
+            log_account_action($conn, 'request_delete', 'Requested deletion of ' . full_name($target) . ' (' . $target['user_id'] . '). Reason: ' . $reason);
+        } else {
+            $alerts[] = ['type' => 'error', 'message' => 'Unable to send delete request.'];
+        }
         $stmt->close();
     }
 
@@ -419,7 +464,7 @@ if (isset($_POST['review_delete_request_btn'])) {
     $requestId = (int)($_POST['request_id'] ?? 0);
     $decision = $_POST['decision'] ?? '';
 
-    $stmt = $conn->prepare("SELECT target_user FROM delete_requests WHERE id = ? AND request_status = 'pending'");
+    $stmt = $conn->prepare("SELECT dr.target_user, u.user_id, u.first_name, u.middle_name, u.last_name, u.extension_name, u.role FROM delete_requests dr JOIN users u ON u.id = dr.target_user WHERE dr.id = ? AND dr.request_status = 'pending'");
     $stmt->bind_param("i", $requestId);
     $stmt->execute();
     $request = $stmt->get_result()->fetch_assoc();
@@ -428,12 +473,19 @@ if (isset($_POST['review_delete_request_btn'])) {
     if (!$request || !in_array($decision, ['approved', 'rejected'], true)) {
         $alerts[] = ['type' => 'error', 'message' => 'Invalid delete request decision.'];
     } else {
+        $targetName = full_name($request);
+        $targetDetails = $targetName . ' (' . $request['user_id'] . ')';
         if ($decision === 'approved') {
             $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
             $stmt->bind_param("i", $request['target_user']);
-            $stmt->execute();
+            $deleted = $stmt->execute();
             $stmt->close();
+            if ($deleted) {
+                log_account_action($conn, 'delete_account', 'Deleted account ' . $targetDetails . ' after approving its deletion request.');
+            }
         }
+
+        log_account_action($conn, 'delete_request_reviewed', ucfirst($decision) . ' deletion request for ' . $targetDetails . '.');
 
         $reviewer = (int)$_SESSION['user_id'];
         $stmt = $conn->prepare("UPDATE delete_requests SET request_status = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?");
@@ -559,6 +611,7 @@ if (isset($_POST['create_staff_btn'])) {
         if ($created) {
             $newUserId = $conn->insert_id;
             $stmt->close();
+            log_account_action($conn, 'create_account', 'Created ' . $newRole . ' account ' . $username . ' (' . $userId . ') with pending activation.');
             
             // Generate and send OTP for account activation
             $otp = create_otp($conn, $newUserId, $email, 'account_activation', $fullName);
@@ -595,7 +648,7 @@ if (isset($_POST['change_role_btn'])) {
     } elseif ($targetId === (int)$_SESSION['user_id']) {
         $alerts[] = ['type' => 'error', 'message' => 'You cannot change your own role.'];
     } else {
-        $targetStmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
+        $targetStmt = $conn->prepare("SELECT user_id, first_name, middle_name, last_name, extension_name, role FROM users WHERE id = ?");
         $targetStmt->bind_param("i", $targetId);
         $targetStmt->execute();
         $target = $targetStmt->get_result()->fetch_assoc();
@@ -631,6 +684,10 @@ if (isset($_POST['change_role_btn'])) {
                         $logStmt->close();
                     }
 
+                    if ($target['role'] !== $newRole) {
+                        log_account_action($conn, 'change_role', 'Changed role for ' . full_name($target) . ' (' . $target['user_id'] . ') from ' . $target['role'] . ' to ' . $newRole . '.');
+                    }
+                    $_SESSION['open_role_privilege_id'] = $targetId;
                     $alerts[] = ['type' => 'success', 'message' => 'Role updated successfully.'];
                 } else {
                     $alerts[] = ['type' => 'error', 'message' => 'Unable to update role: ' . $stmt->error];

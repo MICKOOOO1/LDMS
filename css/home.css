@@ -14,6 +14,10 @@ html, body {
 }
 
 body.user-account-page {
+  background-image: url('../assets/imgs/dorm.jpg');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
   min-height: 100%;
   overflow-y: auto;
 }
@@ -304,7 +308,7 @@ section.hero {
 }
 
 .setup-security-form .asterisk {
-  color: #ff6b6b;
+  color: #198754;
   font-weight: 700;
 }
 
@@ -452,8 +456,13 @@ section.hero {
 }
 
 .user-account-grid .asterisk {
-  color: #d93025;
+  color: #198754;
   font-weight: 700;
+}
+
+.user-account-grid .optional {
+  color: #d93025;
+  font-weight: 600;
 }
 
 .user-account-grid .input-message {

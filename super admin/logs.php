@@ -15,7 +15,7 @@ $actionFilter = trim($_GET['action'] ?? '');
 $date = trim($_GET['date'] ?? '');
 $perPage = (int)($_GET['per_page'] ?? 10);
 $perPage = in_array($perPage, [10, 25, 50], true) ? $perPage : 10;
-$logData = fetch_login_logs($conn, 'super_admin', '', $date, $page, $perPage, $search, $roleFilter, $actionFilter);
+$logData = fetch_super_admin_system_logs($conn, $page, $perPage, $search, $roleFilter, $actionFilter, $date);
 
 function super_admin_logs_page_url(array $overrides = []): string {
     $params = array_merge($_GET, $overrides);
@@ -31,20 +31,20 @@ function super_admin_log_role_label(string $role): string {
     return $role === 'super_admin' ? 'Super Admin' : ucfirst(str_replace('_', ' ', $role));
 }
 
-function super_admin_log_action(array $log): string {
-    return empty($log['time_out']) ? 'active_session' : 'login';
-}
+function super_admin_log_action_label(string $action): string {
+    $labels = [
+        'login' => 'Login',
+        'active_session' => 'Active Session',
+        'block_account' => 'Blocked Account',
+        'unblock_account' => 'Unblocked Account',
+        'create_account' => 'Created Account',
+        'delete_account' => 'Deleted Account',
+        'request_delete' => 'Requested Deletion',
+        'delete_request_reviewed' => 'Reviewed Delete Request',
+        'change_role' => 'Changed Role',
+    ];
 
-function super_admin_log_action_label(array $log): string {
-    return empty($log['time_out']) ? 'Active Session' : 'Login';
-}
-
-function super_admin_log_details(array $log): string {
-    if (empty($log['time_out'])) {
-        return $log['full_name'] . ' is currently logged in.';
-    }
-
-    return $log['full_name'] . ' logged in successfully.';
+    return $labels[$action] ?? ucfirst(str_replace('_', ' ', $action));
 }
 
 render_super_admin_header('System Logs', 'logs');
@@ -55,14 +55,14 @@ render_super_admin_header('System Logs', 'logs');
 
 <section class="page-heading">
     <h1>Activity Logs</h1>
-    <p>System audit trail for user, administrator, and super administrator access.</p>
+    <p>Login activity and account actions performed across the system.</p>
 </section>
 
 <section class="panel activity-log-panel">
     <div class="section-bar activity-log-heading">
         <div>
             <h2>Activity Logs</h2>
-            <p>System audit trail</p>
+            <p>Account actions and access history</p>
         </div>
     </div>
 
@@ -72,6 +72,13 @@ render_super_admin_header('System Logs', 'logs');
             <option value="">All Actions</option>
             <option value="login" <?= $actionFilter === 'login' ? 'selected' : ''; ?>>Login</option>
             <option value="active_session" <?= $actionFilter === 'active_session' ? 'selected' : ''; ?>>Active Session</option>
+            <option value="block_account" <?= $actionFilter === 'block_account' ? 'selected' : ''; ?>>Blocked Account</option>
+            <option value="unblock_account" <?= $actionFilter === 'unblock_account' ? 'selected' : ''; ?>>Unblocked Account</option>
+            <option value="create_account" <?= $actionFilter === 'create_account' ? 'selected' : ''; ?>>Created Account</option>
+            <option value="delete_account" <?= $actionFilter === 'delete_account' ? 'selected' : ''; ?>>Deleted Account</option>
+            <option value="request_delete" <?= $actionFilter === 'request_delete' ? 'selected' : ''; ?>>Requested Deletion</option>
+            <option value="delete_request_reviewed" <?= $actionFilter === 'delete_request_reviewed' ? 'selected' : ''; ?>>Reviewed Delete Request</option>
+            <option value="change_role" <?= $actionFilter === 'change_role' ? 'selected' : ''; ?>>Changed Role</option>
         </select>
         <select name="role" aria-label="Filter by role">
             <option value="">All Roles</option>
@@ -97,8 +104,8 @@ render_super_admin_header('System Logs', 'logs');
                     <th>Name</th>
                     <th>Role</th>
                     <th>Action</th>
-                    <th>Time In</th>
-                    <th>Time Out</th>
+                    <th>Date &amp; Time</th>
+                    <th>Session End</th>
                     <th>Details</th>
                 </tr>
             </thead>
@@ -108,10 +115,11 @@ render_super_admin_header('System Logs', 'logs');
                         <td><?= htmlspecialchars($log['employee_id']); ?></td>
                         <td><?= htmlspecialchars($log['full_name']); ?></td>
                         <td><?= htmlspecialchars(super_admin_log_role_label($log['role'])); ?></td>
-                        <td><span class="log-action log-action-<?= htmlspecialchars(super_admin_log_action($log)); ?>"><?= htmlspecialchars(super_admin_log_action_label($log)); ?></span></td>
-                        <td><?= htmlspecialchars($log['time_in']); ?></td>
-                        <td><?= htmlspecialchars($log['time_out'] ?? 'Active'); ?></td>
-                        <td><?= htmlspecialchars(super_admin_log_details($log)); ?></td>
+                        <?php $isSessionEvent = in_array($log['action'], ['login', 'active_session'], true); ?>
+                        <td><span class="log-action <?= $isSessionEvent ? 'log-action-session' : 'log-action-account'; ?>"><?= htmlspecialchars(super_admin_log_action_label($log['action'])); ?></span></td>
+                        <td><?= htmlspecialchars($log['occurred_at']); ?></td>
+                        <td><?= $isSessionEvent ? htmlspecialchars($log['time_out'] ?? 'Active') : '&mdash;'; ?></td>
+                        <td><?= htmlspecialchars($log['details']); ?></td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if (empty($logData['logs'])): ?>
@@ -124,7 +132,7 @@ render_super_admin_header('System Logs', 'logs');
     <?php if ($logData['pages'] > 1): ?>
         <div class="pagination" aria-label="Login log pages">
             <?php if ($page > 1): ?><a href="<?= htmlspecialchars(super_admin_logs_page_url(['page' => $page - 1])); ?>">Previous</a><?php endif; ?>
-            <span>Page <?= $page; ?> of <?= $logData['pages']; ?></span>
+                <span>Page <?= $page; ?> of <?= $logData['pages']; ?></span>
             <?php if ($page < $logData['pages']): ?><a href="<?= htmlspecialchars(super_admin_logs_page_url(['page' => $page + 1])); ?>">Next</a><?php endif; ?>
         </div>
     <?php endif; ?>

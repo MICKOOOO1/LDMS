@@ -115,7 +115,10 @@ function render_admin_header(string $title, string $active): void {
             <a href="delete_requests.php" class="<?= $active === 'delete_requests' ? 'active' : ''; ?>">Deletion Request</a>
             <a href="logs.php" class="<?= $active === 'logs' ? 'active' : ''; ?>">System Logs</a>
             <a href="my_account.php" class="<?= $active === 'account' ? 'active' : ''; ?>">My Account</a>
-            <span><?= htmlspecialchars($_SESSION['name'] ?? 'Administrator'); ?></span>
+            <div class="sidebar-user">
+                <span class="sidebar-user-name"><?= htmlspecialchars($_SESSION['name'] ?? 'Administrator'); ?></span>
+                <span class="sidebar-user-role"><?= ($_SESSION['role'] ?? '') === 'super_admin' ? 'Super Admin' : 'Admin'; ?></span>
+            </div>
             <a href="../user/logout.php">Logout</a>
         </nav>
     </header>
@@ -325,6 +328,100 @@ function fetch_login_logs(mysqli $conn, string $role, string $month, string $dat
     $pageParams[] = $perPage;
     $pageParams[] = $offset;
     bind_dynamic_params($stmt, $pageTypes, $pageParams);
+    $stmt->execute();
+    $logs = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return ['logs' => $logs, 'total' => $total, 'pages' => max(1, (int)ceil($total / $perPage))];
+}
+
+function log_account_action(mysqli $conn, string $action, string $details): void {
+    $actorId = (int)($_SESSION['user_id'] ?? 0);
+    if ($actorId <= 0) {
+        return;
+    }
+
+    $actorStmt = $conn->prepare("SELECT user_id, first_name, middle_name, last_name, extension_name, role FROM users WHERE id = ?");
+    if (!$actorStmt) {
+        return;
+    }
+    $actorStmt->bind_param('i', $actorId);
+    $actorStmt->execute();
+    $actor = $actorStmt->get_result()->fetch_assoc();
+    $actorStmt->close();
+
+    if (!$actor) {
+        return;
+    }
+
+    $actorName = full_name($actor);
+    $stmt = $conn->prepare("INSERT INTO account_action_logs (actor_user_id, actor_employee_id, actor_name, actor_role, action, details) VALUES (?, ?, ?, ?, ?, ?)");
+    if (!$stmt) {
+        return;
+    }
+
+    $stmt->bind_param('isssss', $actorId, $actor['user_id'], $actorName, $actor['role'], $action, $details);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function fetch_super_admin_system_logs(mysqli $conn, int $page, int $perPage, string $search = '', string $roleFilter = '', string $actionFilter = '', string $date = ''): array {
+    $page = max(1, $page);
+    $perPage = in_array($perPage, [10, 25, 50], true) ? $perPage : 10;
+    $events = "(SELECT employee_id, full_name, role,
+                      CASE WHEN time_out IS NULL THEN 'active_session' ELSE 'login' END AS action,
+                      time_in AS occurred_at, time_out,
+                      CASE WHEN time_out IS NULL THEN CONCAT(full_name, ' is currently logged in.') ELSE CONCAT(full_name, ' logged in successfully.') END AS details
+               FROM login_logs
+               UNION ALL
+               SELECT actor_employee_id AS employee_id, actor_name AS full_name, actor_role AS role,
+                      action, created_at AS occurred_at, NULL AS time_out, details
+               FROM account_action_logs)";
+    $conditions = ['1 = 1'];
+    $params = [];
+    $types = '';
+
+    if (in_array($roleFilter, ['user', 'admin', 'super_admin'], true)) {
+        $conditions[] = 'role = ?';
+        $params[] = $roleFilter;
+        $types .= 's';
+    }
+
+    $allowedActions = ['login', 'active_session', 'block_account', 'unblock_account', 'create_account', 'delete_account', 'request_delete', 'delete_request_reviewed', 'change_role'];
+    if (in_array($actionFilter, $allowedActions, true)) {
+        $conditions[] = 'action = ?';
+        $params[] = $actionFilter;
+        $types .= 's';
+    }
+
+    if ($search !== '') {
+        $conditions[] = '(employee_id LIKE ? OR full_name LIKE ? OR details LIKE ?)';
+        $searchTerm = '%' . $search . '%';
+        array_push($params, $searchTerm, $searchTerm, $searchTerm);
+        $types .= 'sss';
+    }
+
+    if (preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date)) {
+        $conditions[] = 'DATE(occurred_at) = ?';
+        $params[] = $date;
+        $types .= 's';
+    }
+
+    $where = implode(' AND ', $conditions);
+    $countStmt = $conn->prepare("SELECT COUNT(*) AS total FROM $events AS system_events WHERE $where");
+    if ($types !== '') {
+        bind_dynamic_params($countStmt, $types, $params);
+    }
+    $countStmt->execute();
+    $total = (int)$countStmt->get_result()->fetch_assoc()['total'];
+    $countStmt->close();
+
+    $offset = ($page - 1) * $perPage;
+    $stmt = $conn->prepare("SELECT employee_id, full_name, role, action, occurred_at, time_out, details FROM $events AS system_events WHERE $where ORDER BY occurred_at DESC LIMIT ? OFFSET ?");
+    $pageParams = $params;
+    $pageParams[] = $perPage;
+    $pageParams[] = $offset;
+    bind_dynamic_params($stmt, $types . 'ii', $pageParams);
     $stmt->execute();
     $logs = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();

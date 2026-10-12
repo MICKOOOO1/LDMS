@@ -206,9 +206,18 @@ render_admin_header('User Management', 'user_management');
                     </form>
                 <?php endif; ?>
 
-                <?php if ((int)$account['id'] !== (int)$_SESSION['user_id']): ?>
+                <?php if (($_SESSION['role'] ?? '') === 'admin' && admin_has_privilege('request_delete') && (int)$account['id'] !== (int)$_SESSION['user_id'] && $account['role'] !== 'super_admin'): ?>
+                    <form action="../server/admin_process.php" method="POST" class="modal-danger-form" onsubmit="return confirm('Send a deletion request to the super admin?');">
+                        <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
+                        <label>Reason<textarea name="reason" rows="3" placeholder="Enter reason for deletion request..." required></textarea></label>
+                        <button type="submit" name="request_delete_btn">Request Deletion</button>
+                    </form>
+                <?php endif; ?>
+
+                <?php if (((($_SESSION['role'] ?? '') === 'super_admin') || (($_SESSION['role'] ?? '') === 'admin' && admin_has_privilege('delete_accounts'))) && (int)$account['id'] !== (int)$_SESSION['user_id'] && (($_SESSION['role'] ?? '') !== 'admin' || $account['role'] !== 'super_admin')): ?>
                     <form action="../server/admin_process.php" method="POST" class="modal-danger-form" onsubmit="return confirm('Delete this account permanently?');">
                         <input type="hidden" name="target_id" value="<?= (int)$account['id']; ?>">
+                        <label>Reason<textarea name="reason" rows="3" placeholder="Enter reason for deletion..." required></textarea></label>
                         <button type="submit" name="delete_account_btn" class="danger">Delete Account</button>
                     </form>
                 <?php endif; ?>

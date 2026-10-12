@@ -166,6 +166,26 @@ if ($conn->query($sql) === TRUE) {
     echo "Error creating active sessions table: " . $conn->error . "<br>";
 }
 
+$sql = "CREATE TABLE IF NOT EXISTS account_action_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id INT NULL,
+    actor_employee_id VARCHAR(15) NOT NULL,
+    actor_name VARCHAR(160) NOT NULL,
+    actor_role VARCHAR(20) NOT NULL,
+    action VARCHAR(40) NOT NULL,
+    details TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_account_action_logs_created_at (created_at),
+    INDEX idx_account_action_logs_actor_role (actor_role),
+    INDEX idx_account_action_logs_action (action)
+)";
+
+if ($conn->query($sql) === TRUE) {
+    echo "Account action logs table created successfully<br>";
+} else {
+    echo "Error creating account action logs table: " . $conn->error . "<br>";
+}
+
 // 10) Create pending_registrations table
 $sql = "CREATE TABLE IF NOT EXISTS pending_registrations (
     id INT AUTO_INCREMENT PRIMARY KEY,

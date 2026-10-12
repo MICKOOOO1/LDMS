@@ -9,6 +9,8 @@ require '_header.php';
 
 $alerts = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
+$openRolePrivilegeId = (int)($_SESSION['open_role_privilege_id'] ?? 0);
+unset($_SESSION['open_role_privilege_id']);
 
 // For Create Account modal - auto-generate ID
 $createRoleDefault = 'admin';
@@ -280,6 +282,7 @@ render_super_admin_header('User Management', 'accounts');
                         <label><input type="checkbox" name="privileges[]" value="manage_registration" <?= in_array('manage_registration', $privileges, true) ? 'checked' : ''; ?>> Manage Registration</label>
                         <label><input type="checkbox" name="privileges[]" value="update_accounts" <?= in_array('update_accounts', $privileges, true) ? 'checked' : ''; ?>> Update Accounts</label>
                         <label><input type="checkbox" name="privileges[]" value="request_delete" <?= in_array('request_delete', $privileges, true) ? 'checked' : ''; ?>> Request Delete</label>
+                        <label><input type="checkbox" name="privileges[]" value="delete_accounts" <?= in_array('delete_accounts', $privileges, true) ? 'checked' : ''; ?>> Delete Accounts</label>
                     <?php elseif ($account['role'] === 'super_admin'): ?>
                         <label><input type="checkbox" name="privileges[]" value="manage_accounts" <?= in_array('manage_accounts', $privileges, true) ? 'checked' : ''; ?>> Manage Accounts</label>
                         <label><input type="checkbox" name="privileges[]" value="manage_privileges" <?= in_array('manage_privileges', $privileges, true) ? 'checked' : ''; ?>> Manage Privileges</label>
@@ -414,6 +417,11 @@ render_super_admin_header('User Management', 'accounts');
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const openRolePrivilegeId = <?= $openRolePrivilegeId; ?>;
+    if (openRolePrivilegeId > 0) {
+        window.location.hash = 'role-privilege-' + openRolePrivilegeId;
+    }
+
     // Actions menu dropdown toggle
     document.querySelectorAll('.actions-trigger').forEach(function(trigger) {
         trigger.addEventListener('click', function(e) {
