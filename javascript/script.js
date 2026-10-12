@@ -760,12 +760,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const registerForm = document.getElementById('registerForm');
     if (registerForm) {
         registerForm.addEventListener('submit', e => {
-            try {
-                console.log('Register form submit triggered');
-                console.log('Form data:', new FormData(registerForm));
-            } catch (err) {
-                console.error('Error in submit debug log:', err);
-            }
             // Ensure age is calculated before validation
             if (dobInput && dobInput.value && ageField && ageField.value === '') {
                 const dobValue = dobInput.value;
@@ -781,25 +775,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 'first_name','last_name','dob','age','username','email','password','re_password',
                 'purok_street','barangay','city_municipality','province','country','zip_code'
             ];
-
-            // Quick snapshot of current form values for debugging
-            try {
-                const snapshot = {};
-                requiredNames.forEach(n => {
-                    const el = registerForm.querySelector(`[name="${n}"]`);
-                    snapshot[n] = el ? (el.value || '').trim() : '';
-                });
-                console.log('Register form snapshot:', snapshot);
-            } catch (snapErr) {
-                console.error('Snapshot error:', snapErr);
-            }
-
-            // If debug_submit=1 is present in URL or localStorage, skip client validation to let server-side checks run
-            const debugSubmit = (new URLSearchParams(window.location.search)).get('debug_submit') === '1' || localStorage.getItem('debug_submit') === '1';
-            if (debugSubmit) {
-                console.log('Debug submit enabled — skipping client-side validation and allowing POST to server.');
-                return; // allow the form to submit normally
-            }
 
             let firstInvalid = null;
             requiredNames.forEach(name => {
@@ -848,12 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!firstInvalid) firstInvalid = ageField;
             }
 
-            if (firstInvalid) {
-                firstInvalid.focus();
-                console.log('Form submission prevented. First invalid field:', firstInvalid.name);
-            } else {
-                console.log('All validations passed. Form will submit.');
-            }
+            if (firstInvalid) firstInvalid.focus();
         });
     }
 

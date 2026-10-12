@@ -405,41 +405,65 @@ if (isset($_POST['register_btn'])) {
 
     // Retrieve and sanitize input
     $user_id         = generate_next_id($conn, 'user');
-    $first_name      = trim($_POST['first_name']);
+    $first_name      = trim($_POST['first_name'] ?? '');
     $middle_name     = trim($_POST['middle_name'] ?? '');
-    $last_name       = trim($_POST['last_name']);
+    $last_name       = trim($_POST['last_name'] ?? '');
     $extension_name  = trim($_POST['extension_name'] ?? '');
-    $dob             = $_POST['dob'];
-    // Calculate age from DOB server-side to ensure accuracy
-    $dob_date = new DateTime($dob);
-    $today = new DateTime();
-    $age = $today->diff($dob_date)->y;
-    $sex             = $_POST['sex'];
-    $username        = trim($_POST['username']);
-    $email           = trim($_POST['email']);
-    $password        = $_POST['password'];
-    $re_password     = $_POST['re_password'];
+    $dob             = trim($_POST['dob'] ?? '');
+    $dob_date = DateTime::createFromFormat('!Y-m-d', $dob);
+    $dob_errors = DateTime::getLastErrors();
+    $dob_is_valid = $dob_date !== false
+        && ($dob_errors === false || ($dob_errors['warning_count'] === 0 && $dob_errors['error_count'] === 0))
+        && $dob_date->format('Y-m-d') === $dob;
+    $today = new DateTime('today');
+    $age = 0;
+    if (!$dob_is_valid) {
+        $alerts[] = ['type' => 'error', 'message' => 'Please enter a valid date of birth.'];
+    } elseif ($dob_date > $today) {
+        $alerts[] = ['type' => 'error', 'message' => 'Date of birth cannot be in the future.'];
+    } else {
+        $age = $dob_date->diff($today)->y;
+        if ($age < 18) {
+            $alerts[] = ['type' => 'error', 'message' => 'You must be at least 18 years old.'];
+        }
+    }
+    $sex             = $_POST['sex'] ?? '';
+    $username        = trim($_POST['username'] ?? '');
+    $email           = trim($_POST['email'] ?? '');
+    $password        = $_POST['password'] ?? '';
+    $re_password     = $_POST['re_password'] ?? '';
 
-    $purok_street     = trim($_POST['purok_street']);
-    $barangay         = trim($_POST['barangay']);
-    $city_municipality= trim($_POST['city_municipality']);
-    $province         = trim($_POST['province']);
-    $country          = trim($_POST['country']);
-    $zip_code         = trim($_POST['zip_code']);
+    $purok_street     = trim($_POST['purok_street'] ?? '');
+    $barangay         = trim($_POST['barangay'] ?? '');
+    $city_municipality= trim($_POST['city_municipality'] ?? '');
+    $province         = trim($_POST['province'] ?? '');
+    $country          = trim($_POST['country'] ?? '');
+    $zip_code         = trim($_POST['zip_code'] ?? '');
 
     // ================= BASIC VALIDATION =================
     if (empty($first_name) || empty($last_name) || empty($dob) || empty($sex) || empty($username) || empty($email) || empty($password) || empty($re_password) || empty($purok_street) || empty($barangay) || empty($city_municipality) || empty($province) || empty($country) || empty($zip_code)) {
         $alerts[] = ['type' => 'error', 'message' => 'All required fields must be filled out.'];
     }
 
-    // Validate age
-    if ($age < 18) {
-        $alerts[] = ['type' => 'error', 'message' => 'You must be at least 18 years old.'];
-    }
-
     // Password match
     if ($password !== $re_password) {
         $alerts[] = ['type' => 'error', 'message' => 'Passwords do not match.'];
+    }
+
+    if (strlen($password) < 8) {
+        $alerts[] = ['type' => 'error', 'message' => 'Password must be at least 8 characters long.'];
+    }
+    if (!preg_match('/[A-Z]/', $password)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Password must contain at least 1 uppercase letter.'];
+    }
+    if (!preg_match('/[a-z]/', $password)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Password must contain at least 1 lowercase letter.'];
+    }
+    if (!preg_match('/[0-9]/', $password)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Password must contain at least 1 number.'];
+    }
+    if (!preg_match('/[^\w]/', $password)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Password must contain at least 1 special character.'];
     }
 
     // Name validations (First, Middle, Last, Extension)
@@ -608,6 +632,16 @@ if (isset($_POST['register_btn'])) {
     // Email length validation: 5–70 characters
     if (strlen($email) < 5 || strlen($email) > 70) {
         $alerts[] = ['type' => 'error', 'message' => 'Email Address must be between 5 and 70 characters.'];
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $alerts[] = ['type' => 'error', 'message' => 'Please enter a valid email address.'];
+    } else {
+        $emailDomain = strtolower(substr(strrchr($email, '@'), 1));
+        $allowedEmailDomain = in_array($emailDomain, ['yahoo.com', 'email.com', 'gmail.com'], true)
+            || preg_match('/(^|\.)edu(\.[a-z]{2})?$/i', $emailDomain);
+        if (!$allowedEmailDomain) {
+            $alerts[] = ['type' => 'error', 'message' => 'Please use an email from yahoo.com, email.com, gmail.com or a .edu domain.'];
+        }
     }
 
     // Check username, email uniqueness (both approved users and pending registrations)
